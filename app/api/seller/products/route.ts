@@ -14,7 +14,7 @@ const productSchema = z.object({
   resellerPrice: z.coerce.number().int().nonnegative().optional(),
   fulfillmentType: z.enum(["auto", "manual"]),
   status: z.enum(["draft", "active", "inactive", "blocked"]).default("active"),
-  categoryId: z.string().uuid().optional(),
+  categoryId: z.coerce.number().int().positive().optional(),
   isCustomPackage: z.coerce.boolean().optional()
 });
 

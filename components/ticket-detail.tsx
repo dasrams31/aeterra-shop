@@ -2,7 +2,7 @@ import { TicketLiveThread } from "@/components/ticket-live-thread";
 
 type TicketDetailProps = {
   ticket: {
-    id: string;
+    id: number | string;
     subject: string;
     status: string;
     orderNumber: string | null;
@@ -10,7 +10,7 @@ type TicketDetailProps = {
     buyerName: string;
   };
   messages: Array<{
-    id: string;
+    id: number | string;
     message: string;
     senderName: string;
     senderRole: string;

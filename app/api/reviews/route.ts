@@ -8,7 +8,7 @@ import { createReview } from "@/lib/reviews";
 import { logActivity } from "@/lib/activity";
 
 const reviewSchema = z.object({
-  orderItemId: z.string().uuid(),
+  orderItemId: z.coerce.number().int().positive(),
   rating: z.coerce.number().int().min(1).max(5),
   comment: z.string().max(1000).optional()
 });
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     actorId: current.user.id,
     action: "review.created",
     entityType: "review",
-    entityId: item.id,
+    entityId: String(item.id),
     metadata: { productId: item.productId, rating: payload.rating }
   });
 

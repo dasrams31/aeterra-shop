@@ -2,58 +2,34 @@ function pickReply(message: string) {
   const text = message.toLowerCase();
 
   if (text.includes("halo") || text.includes("hallo") || text.includes("hai") || text.includes("help")) {
-    return "Halo. Saya bisa bantu soal checkout, invoice, delivery, reseller, dan ticket support.";
+    return "Halo! Saya asisten Aeternum Shop. Saya bisa bantu seputar katalog produk premium, checkout QRIS, invoice, delivery instan, dan integrasi bot Telegram.";
   }
 
   if (text.includes("tutor beli") || text.includes("cara beli") || text.includes("cara checkout") || text.includes("cara order")) {
-    return "Cara beli singkat: pilih produk, klik checkout, bayar via Pakasir, lalu pantau status di invoice tracker atau dashboard order.";
+    return "Cara beli sangat mudah: pilih produk di katalog, klik Checkout, scan kode QRIS dinamis via GoPay/OVO/DANA/BCA/ShopeePay, dan pesanan/lisensi akan langsung terkirim otomatis dalam hitungan detik!";
   }
 
-  if (text.includes("checkout") || text.includes("bayar") || text.includes("pembayaran")) {
-    return "Checkout dilakukan dari halaman produk. Sistem membuat order, redirect ke Pakasir, lalu status muncul di dashboard dan invoice tracker.";
+  if (text.includes("checkout") || text.includes("bayar") || text.includes("pembayaran") || text.includes("qris")) {
+    return "Pembayaran menggunakan QRIS Dinamis KlikQRIS atau Saldo Dompet. Begitu pembayaran selesai, sistem otomatis memverifikasi dan mengirimkan akun ke dashboard & Telegram kamu.";
   }
 
   if (text.includes("pending") || text.includes("belum bayar") || text.includes("lanjut bayar")) {
-    return "Kalau payment masih pending, buka Dashboard > Pembayaran. Jika payment URL masih tersedia, klik Bayar untuk lanjut ke Pakasir.";
+    return "Jika transaksi masih pending, buka menu Dashboard > Riwayat/Pembayaran untuk melihat kode QRIS dan tekan 'Cek Status' setelah transfer.";
   }
 
   if (text.includes("invoice") || text.includes("cek invoice")) {
-    return "Masukkan nomor invoice di navbar atau halaman invoice tracker. Di sana kamu bisa lihat status order, payment, total, dan nama produk.";
+    return "Masukkan nomor invoice di navbar atau halaman invoice tracker. Kamu bisa melihat status order, QRIS, total pembayaran, dan kredensial produk.";
   }
 
   if (text.includes("delivery") || text.includes("akses") || text.includes("stok")) {
-    return "Auto delivery mengirim stok otomatis setelah payment paid. Manual delivery diproses seller lalu buyer melihat detail di dashboard order.";
+    return "Auto delivery mengirimkan kredensial/akun secara instan segera setelah pembayaran QRIS terkonfirmasi lunas oleh sistem.";
   }
 
-  if (text.includes("kategori") || text.includes("filter")) {
-    return "Di marketplace kamu bisa cari produk dengan search dan filter kategori seperti AI, Design, Streaming, Tools, Lisensi, atau Bundle.";
+  if (text.includes("bot") || text.includes("telegram")) {
+    return "Aeternum Shop terintegrasi penuh 100% dengan Bot Telegram @aeternum_premibot. Saldo, katalog, stok, dan riwayat transaksi tersinkronisasi langsung secara real-time!";
   }
 
-  if (text.includes("harga reseller") || text.includes("harga khusus")) {
-    return "Harga reseller muncul untuk user yang status reseller-nya approved dan hanya pada produk yang punya harga reseller.";
-  }
-
-  if (text.includes("seller") || text.includes("jual") || text.includes("stok digital")) {
-    return "Seller bisa mengelola produk dan stok dari dashboard seller. Stok auto delivery bisa ditambah bulk dengan satu JSON per baris di halaman stok.";
-  }
-
-  if (text.includes("reseller")) {
-    return "Kamu bisa ajukan reseller dari dashboard buyer. Jika approved, harga reseller muncul pada produk yang mendukung.";
-  }
-
-  if (text.includes("support") || text.includes("ticket") || text.includes("bantuan")) {
-    return "Kalau ada kendala, buka ticket dari order atau halaman support. Ticket dipakai untuk cek invoice, akses, atau masalah order.";
-  }
-
-  if (text.includes("paid") || text.includes("sudah bayar") || text.includes("belum masuk")) {
-    return "Jika payment sudah paid tapi akses belum masuk, cek dashboard order. Kalau status masih processing atau akses kosong, buka ticket dari order tersebut.";
-  }
-
-  if (text.includes("produk") || text.includes("chatgpt") || text.includes("gemini") || text.includes("canva")) {
-    return "Produk seed utama: ChatGPT Plus Private 1 Bulan Rp35.000, Gemini Pro 18 Bulan Rp56.000, dan Canva Pro Team 1 Bulan Rp35.000. Ada juga paket custom sebagai produk dengan flag khusus.";
-  }
-
-  return "Saya belum punya jawaban spesifik untuk itu. Info inti marketplace: buyer bisa checkout produk digital, cek invoice, lihat review, dan buka ticket support.";
+  return "Ada yang bisa dibantu mengenai produk digital, saldo dompet, atau pesanan Anda di Aeternum Shop?";
 }
 
 export function buildFallbackChatReply(message: string) {

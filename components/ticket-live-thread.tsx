@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from "react";
 
-type TicketMessage = {
-  id: string;
+export type TicketMessage = {
+  id: number | string;
   message: string;
   senderName: string;
   senderRole: string;
   createdAt: string;
 };
 
-export function TicketLiveThread({ ticketId, initialMessages }: { ticketId: string; initialMessages: TicketMessage[] }) {
+export function TicketLiveThread({ ticketId, initialMessages }: { ticketId: number | string; initialMessages: TicketMessage[] }) {
   const [messages, setMessages] = useState(initialMessages);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
@@ -26,7 +26,7 @@ export function TicketLiveThread({ ticketId, initialMessages }: { ticketId: stri
         setMessages(data.messages);
         setUpdatedAt(new Date().toLocaleTimeString("id-ID"));
       } catch {
-        // ponytail: polling is best-effort; form submit still works if live refresh fails.
+        // polling is best-effort
       }
     }
 

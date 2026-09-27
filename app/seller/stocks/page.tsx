@@ -21,8 +21,8 @@ export default async function SellerStocksPage({
   );
   const stocks = (await listStocksBySellerId(sellerId)).filter((stock) => !status || stock.status === status);
   const stockCounts = (await listStocksBySellerId(sellerId)).reduce(
-    (acc, stock) => {
-      acc[stock.status] += 1;
+    (acc: Record<string, number>, stock) => {
+      acc[stock.status] = (acc[stock.status] || 0) + 1;
       return acc;
     },
     { available: 0, sold: 0, disabled: 0, reserved: 0 }

@@ -1,21 +1,22 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { orderItems, orders, payments, products } from "@/db/schema";
+import { orderItems, orders, payments, products, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/session-server";
-import { buildPakasirPaymentUrl } from "@/lib/pakasir";
-import { createOrderNumber } from "@/lib/orders";
+import { createKlikQrisTransaction } from "@/lib/klikqris";
+import { createOrderNumber, fulfillAutoDelivery } from "@/lib/orders";
 import { logActivity } from "@/lib/activity";
 import { canCheckout } from "@/lib/backend-guards.js";
 import { defaultPaymentProvider } from "@/lib/payment-providers.js";
 import { productPriceForUser } from "@/lib/pricing.js";
 import { getReferralCodeForUserSignup } from "@/lib/referrals-data";
 import { getMarketplaceSettings } from "@/lib/sellers";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 const checkoutSchema = z.object({
-  productId: z.string().uuid(),
-  quantity: z.coerce.number().int().positive().default(1)
+  productId: z.coerce.number().int().positive(),
+  quantity: z.coerce.number().int().positive().default(1),
+  paymentMethod: z.enum(["QRIS", "BALANCE"]).default("QRIS")
 });
 
 export async function POST(request: Request) {
@@ -27,7 +28,8 @@ export async function POST(request: Request) {
   const form = await request.formData();
   const payload = checkoutSchema.parse({
     productId: form.get("productId"),
-    quantity: form.get("quantity") ?? 1
+    quantity: form.get("quantity") ?? 1,
+    paymentMethod: form.get("paymentMethod") ?? "QRIS"
   });
 
   const db = getDb();
@@ -37,41 +39,120 @@ export async function POST(request: Request) {
   }
 
   const [product] = await db.select().from(products).where(eq(products.id, payload.productId)).limit(1);
-  if (!product || product.status !== "active") {
+  if (!product || (product.status !== "active" && !product.isActive)) {
     return NextResponse.json({ error: "Produk tidak tersedia" }, { status: 404 });
   }
 
   const orderNumber = createOrderNumber();
   const unitPrice = productPriceForUser(product, current.user);
-  const amount = unitPrice * payload.quantity;
+  const baseAmount = unitPrice * payload.quantity;
   const referralCode = await getReferralCodeForUserSignup(current.user.id);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
-  const projectSlug = process.env.PAKASIR_PROJECT_SLUG;
-  if (!projectSlug) {
-    return NextResponse.json({ error: "PAKASIR_PROJECT_SLUG is not configured" }, { status: 500 });
+
+  // Option A: Bayar dengan Saldo Internal
+  if (payload.paymentMethod === "BALANCE") {
+    const userBalance = Number(current.user.balance ?? 0);
+    if (userBalance < baseAmount) {
+      return NextResponse.json({ error: "Saldo tidak mencukupi" }, { status: 400 });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      // Deduct balance atomically
+      await tx
+        .update(users)
+        .set({
+          balance: sql`balance - ${baseAmount}`,
+          updatedAt: new Date()
+        })
+        .where(eq(users.id, current.user.id));
+
+      const [order] = await tx
+        .insert(orders)
+        .values({
+          id: orderNumber,
+          buyerId: current.user.id,
+          orderNumber,
+          status: "paid",
+          totalAmount: baseAmount,
+          paidAt: new Date()
+        })
+        .returning();
+
+      await tx.insert(orderItems).values({
+        orderId: order.id,
+        productId: product.id,
+        sellerId: product.sellerId,
+        quantity: payload.quantity,
+        unitPrice: unitPrice,
+        fulfillmentType: product.fulfillmentType,
+        deliveryStatus: "pending"
+      });
+
+      await tx.insert(payments).values({
+        orderId: order.id,
+        provider: "balance",
+        providerReference: orderNumber,
+        amount: baseAmount,
+        status: "paid",
+        paidAt: new Date()
+      });
+
+      // Synchronize with transactions table in aeternum_premiapp_db
+      await tx.execute(sql`
+        INSERT INTO transactions (
+          id, user_id, product_id, trx_type, payment_method, 
+          original_amount, discount_amount, amount, status, paid_at, created_at
+        ) VALUES (
+          ${orderNumber}, ${current.user.id}, ${product.id}, 'PURCHASE', 'BALANCE',
+          ${baseAmount}, 0, ${baseAmount}, 'PAID', NOW(), NOW()
+        ) ON CONFLICT (id) DO UPDATE SET status = 'PAID', paid_at = NOW();
+      `);
+
+      return order;
+    });
+
+    await fulfillAutoDelivery(result.id);
+
+    await logActivity({
+      actorId: current.user.id,
+      action: "order.paid_balance",
+      entityType: "order",
+      entityId: String(result.id),
+      metadata: { orderNumber, productId: product.id, quantity: payload.quantity, amount: baseAmount }
+    });
+
+    return NextResponse.redirect(new URL(`/dashboard/orders/${orderNumber}`, request.url), { status: 303 });
   }
 
+  // Option B: Bayar via QRIS (KlikQRIS)
   const redirectUrl = `${appUrl}/dashboard/orders/${orderNumber}`;
-  const paymentUrl = buildPakasirPaymentUrl({
-    projectSlug,
-    amount,
+  const klikQrisRes = await createKlikQrisTransaction({
     orderId: orderNumber,
+    amount: baseAmount,
+    customerName: current.user.name || current.user.firstName || "Pelanggan",
+    description: `Order #${orderNumber} - ${product.name}`,
     redirectUrl
   });
 
-  const [order] = await db.insert(orders).values({
-    buyerId: current.user.id,
-    orderNumber,
-    status: "pending_payment",
-    totalAmount: amount
-  }).returning();
+  const finalAmount = klikQrisRes.success ? klikQrisRes.totalAmount : baseAmount;
+
+  const [order] = await db
+    .insert(orders)
+    .values({
+      id: orderNumber,
+      buyerId: current.user.id,
+      orderNumber,
+      status: "pending_payment",
+      totalAmount: finalAmount
+    })
+    .returning();
 
   await db.insert(orderItems).values({
     orderId: order.id,
     productId: product.id,
     sellerId: product.sellerId,
     quantity: payload.quantity,
-    unitPrice,
+    unitPrice: unitPrice,
     fulfillmentType: product.fulfillmentType,
     deliveryStatus: "pending"
   });
@@ -80,18 +161,42 @@ export async function POST(request: Request) {
     orderId: order.id,
     provider: defaultPaymentProvider,
     providerReference: orderNumber,
-    paymentUrl,
-    amount,
-    status: "pending"
+    paymentUrl: klikQrisRes.reportUrl || klikQrisRes.qrisUrl,
+    qrisImage: klikQrisRes.qrisImage,
+    amount: finalAmount,
+    status: "pending",
+    rawPayload: klikQrisRes
   });
+
+  // Synchronize transaction into transactions table
+  await db.execute(sql`
+    INSERT INTO transactions (
+      id, user_id, product_id, trx_type, payment_method, 
+      original_amount, discount_amount, amount, qris_string, qris_image_url, 
+      gateway_reference, status, expired_at, created_at
+    ) VALUES (
+      ${orderNumber}, ${current.user.id}, ${product.id}, 'PURCHASE', 'QRIS',
+      ${baseAmount}, 0, ${finalAmount}, '', ${klikQrisRes.qrisUrl ?? ''},
+      ${orderNumber}, 'PENDING', NOW() + INTERVAL '1 hour', NOW()
+    ) ON CONFLICT (id) DO UPDATE SET 
+      amount = ${finalAmount}, 
+      qris_image_url = ${klikQrisRes.qrisUrl ?? ''};
+  `);
 
   await logActivity({
     actorId: current.user.id,
     action: "order.created",
     entityType: "order",
     entityId: order.id,
-    metadata: { orderNumber, productId: product.id, quantity: payload.quantity, amount, provider: defaultPaymentProvider, referralCode }
+    metadata: {
+      orderNumber,
+      productId: product.id,
+      quantity: payload.quantity,
+      amount: finalAmount,
+      provider: defaultPaymentProvider,
+      referralCode
+    }
   });
 
-  return NextResponse.redirect(paymentUrl, { status: 303 });
+  return NextResponse.redirect(new URL(`/dashboard/orders/${orderNumber}`, request.url), { status: 303 });
 }

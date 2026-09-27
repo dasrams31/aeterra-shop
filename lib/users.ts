@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, or } from "drizzle-orm";
 import { getDb } from "@/db";
 import { users } from "@/db/schema";
 
@@ -8,9 +8,19 @@ export async function findUserByEmail(email: string) {
   return user ?? null;
 }
 
-export async function findUserById(id: string) {
+export async function findUserByUsernameOrEmail(identifier: string) {
   const db = getDb();
-  const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(or(eq(users.email, identifier), eq(users.username, identifier)))
+    .limit(1);
+  return user ?? null;
+}
+
+export async function findUserById(id: number | string) {
+  const db = getDb();
+  const [user] = await db.select().from(users).where(eq(users.id, Number(id))).limit(1);
   return user ?? null;
 }
 

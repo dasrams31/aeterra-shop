@@ -2,9 +2,15 @@ import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { products, reviews, users } from "@/db/schema";
 
-export async function getReviewByOrderItemId(orderItemId: string) {
+export async function getReviewByOrderItemId(orderItemId: number | string) {
   const db = getDb();
-  const [review] = await db.select().from(reviews).where(eq(reviews.orderItemId, orderItemId)).limit(1);
+  const [review] = await db.select().from(reviews).where(eq(reviews.orderItemId, Number(orderItemId))).limit(1);
+  return review ?? null;
+}
+
+export async function getReviewByTransactionId(transactionId: string) {
+  const db = getDb();
+  const [review] = await db.select().from(reviews).where(eq(reviews.transactionId, transactionId)).limit(1);
   return review ?? null;
 }
 
@@ -16,6 +22,7 @@ export async function listAdminReviews() {
       rating: reviews.rating,
       comment: reviews.comment,
       isHidden: reviews.isHidden,
+      isPostedToChannel: reviews.isPostedToChannel,
       createdAt: reviews.createdAt,
       buyerName: users.name,
       productName: products.name,
@@ -35,6 +42,7 @@ export async function listReviewsBySellerId(sellerId: string | null) {
       rating: reviews.rating,
       comment: reviews.comment,
       isHidden: reviews.isHidden,
+      isPostedToChannel: reviews.isPostedToChannel,
       createdAt: reviews.createdAt,
       buyerName: users.name,
       productName: products.name,
@@ -47,12 +55,12 @@ export async function listReviewsBySellerId(sellerId: string | null) {
   return sellerId ? base.where(eq(products.sellerId, sellerId)).orderBy(desc(reviews.createdAt)) : base.orderBy(desc(reviews.createdAt));
 }
 
-export async function hideReview(reviewId: string, hidden: boolean) {
+export async function hideReview(reviewId: number | string, hidden: boolean) {
   const db = getDb();
-  await db.update(reviews).set({ isHidden: hidden, updatedAt: new Date() }).where(eq(reviews.id, reviewId));
+  await db.update(reviews).set({ isHidden: hidden, updatedAt: new Date() }).where(eq(reviews.id, Number(reviewId)));
 }
 
-export async function listReviewsByProductId(productId: string, limit = 3) {
+export async function listReviewsByProductId(productId: number | string, limit = 3) {
   const db = getDb();
 
   return db
@@ -65,17 +73,17 @@ export async function listReviewsByProductId(productId: string, limit = 3) {
     })
     .from(reviews)
     .innerJoin(users, eq(reviews.buyerId, users.id))
-    .where(and(eq(reviews.productId, productId), eq(reviews.isHidden, false)))
+    .where(and(eq(reviews.productId, Number(productId)), eq(reviews.isHidden, false)))
     .orderBy(desc(reviews.createdAt))
     .limit(limit);
 }
 
-export async function getReviewSummaryByProductId(productId: string) {
+export async function getReviewSummaryByProductId(productId: number | string) {
   const db = getDb();
   const rows = await db
     .select({ rating: reviews.rating })
     .from(reviews)
-    .where(and(eq(reviews.productId, productId), eq(reviews.isHidden, false)));
+    .where(and(eq(reviews.productId, Number(productId)), eq(reviews.isHidden, false)));
   const count = rows.length;
   const average = count === 0 ? 0 : rows.reduce((total, row) => total + row.rating, 0) / count;
 
@@ -110,8 +118,8 @@ export async function listTopRatedProducts(limit = 3) {
     .where(eq(reviews.isHidden, false))
     .orderBy(desc(reviews.createdAt));
 
-  const grouped = new Map<string, {
-    productId: string;
+  const grouped = new Map<number, {
+    productId: number;
     productName: string;
     productSlug: string;
     totalRating: number;
@@ -152,9 +160,10 @@ export async function listTopRatedProducts(limit = 3) {
 }
 
 export async function createReview(input: {
-  productId: string;
-  orderItemId: string;
-  buyerId: string;
+  productId: number | string;
+  orderItemId?: number | string | null;
+  transactionId?: string | null;
+  buyerId: number | string;
   rating: number;
   comment?: string | null;
 }) {
@@ -162,9 +171,10 @@ export async function createReview(input: {
   const [review] = await db
     .insert(reviews)
     .values({
-      productId: input.productId,
-      orderItemId: input.orderItemId,
-      buyerId: input.buyerId,
+      productId: Number(input.productId),
+      orderItemId: input.orderItemId ? Number(input.orderItemId) : null,
+      transactionId: input.transactionId ?? `TRX-${Date.now()}`,
+      buyerId: Number(input.buyerId),
       rating: input.rating,
       comment: input.comment ?? null
     })

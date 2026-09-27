@@ -7,12 +7,12 @@ import { ensureSellerProfile, findApprovedSellerProfileByUserId } from "@/lib/se
 import { eq } from "drizzle-orm";
 
 const stockSchema = z.object({
-  productId: z.string().uuid(),
+  productId: z.coerce.number().int().positive(),
   content: z.string().min(2)
 });
 
 const disableStockSchema = z.object({
-  stockId: z.string().uuid()
+  stockId: z.coerce.number().int().positive()
 });
 
 export async function POST(request: Request) {
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   if (form.get("action") === "disable") {
     const payload = disableStockSchema.parse({ stockId: form.get("stockId") });
     const [stock] = await db
-      .select({ id: productStocks.id, status: productStocks.status, sellerId: products.sellerId })
+      .select({ id: productStocks.id, isSold: productStocks.isSold, sellerId: products.sellerId })
       .from(productStocks)
       .innerJoin(products, eq(productStocks.productId, products.id))
       .where(eq(productStocks.id, payload.stockId))
@@ -46,8 +46,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Stock not found" }, { status: 404 });
     }
 
-    if (stock.status === "available") {
-      await db.update(productStocks).set({ status: "disabled" }).where(eq(productStocks.id, payload.stockId));
+    if (!stock.isSold) {
+      await db.update(productStocks).set({ isSold: true }).where(eq(productStocks.id, payload.stockId));
     }
 
     return NextResponse.redirect(new URL(current.session.role === "admin" ? "/admin/products" : "/seller/stocks", request.url), { status: 303 });
@@ -70,21 +70,16 @@ export async function POST(request: Request) {
     }
   }
 
-  let parsedContents: Record<string, unknown>[];
-  try {
-    const lines = payload.content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    parsedContents = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
-  } catch {
-    return NextResponse.json({ error: "Content must be valid JSON per line" }, { status: 400 });
-  }
-
-  const stockRows: Array<{ productId: string; content: Record<string, unknown>; status: "available" }> = parsedContents.map((content) => ({
+  const lines = payload.content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const stockRows = lines.map((line) => ({
     productId: payload.productId,
-    content,
-    status: "available"
+    content: line,
+    isSold: false
   }));
 
-  await db.insert(productStocks).values(stockRows);
+  if (stockRows.length > 0) {
+    await db.insert(productStocks).values(stockRows);
+  }
 
   return NextResponse.redirect(new URL(current.session.role === "admin" ? "/admin/products" : "/seller/stocks", request.url), { status: 303 });
 }

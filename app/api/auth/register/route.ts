@@ -24,9 +24,10 @@ export async function POST(request: Request) {
 
   const db = getDb();
   const passwordHash = hashPassword(payload.password);
+  const userId = Math.floor(Date.now() / 1000) * 1000 + Math.floor(Math.random() * 1000);
   const [user] = await db
     .insert(users)
-    .values({ name: payload.name, email: payload.email.toLowerCase(), passwordHash })
+    .values({ id: userId, name: payload.name, email: payload.email.toLowerCase(), passwordHash })
     .returning();
 
   const response = NextResponse.redirect(new URL(user.role === "seller" ? "/seller" : user.role === "admin" ? "/admin" : "/dashboard", request.url));
@@ -37,11 +38,13 @@ export async function POST(request: Request) {
     path: "/",
     maxAge: 60 * 60 * 24 * 7
   });
-  await logActivity({ actorId: user.id, action: "auth.register", entityType: "user", entityId: user.id, metadata: { email: user.email, role: user.role, referralCode: payload.referralCode ?? null } });
-  await sendNotificationEmail({
-    to: user.email,
-    subject: "Akun Aeternum Shop berhasil dibuat",
-    text: `Halo ${user.name}, akun Aeternum Shop kamu sudah aktif. Kamu bisa checkout produk digital dan pantau pesanan dari dashboard.`
-  });
+  await logActivity({ actorId: user.id, action: "auth.register", entityType: "user", entityId: String(user.id), metadata: { email: user.email, role: user.role, referralCode: payload.referralCode ?? null } });
+  if (user.email) {
+    await sendNotificationEmail({
+      to: user.email,
+      subject: "Akun Aeternum Shop berhasil dibuat",
+      text: `Halo ${user.name}, akun Aeternum Shop kamu sudah aktif. Kamu bisa checkout produk digital dan pantau pesanan dari dashboard.`
+    });
+  }
   return response;
 }

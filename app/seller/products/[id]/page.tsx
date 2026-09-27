@@ -11,9 +11,10 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   if (!current) notFound();
 
   const { id } = await params;
+  const idNum = Number(id);
 
   const db = getDb();
-  const [product] = await db.select().from(products).where(eq(products.id, id)).limit(1);
+  const [product] = await db.select().from(products).where(eq(products.id, idNum)).limit(1);
   if (!product) notFound();
 
   return (

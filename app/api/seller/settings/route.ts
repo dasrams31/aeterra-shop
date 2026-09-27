@@ -28,9 +28,8 @@ export async function POST(request: NextRequest) {
     description: payload.description ?? null
   });
 
-  if (result.error === "missing") return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
-  if (result.error === "slug_taken") return NextResponse.redirect(new URL("/seller/settings?error=slug", request.url), { status: 303 });
+  if (!result) return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
 
-  await logActivity({ actorId: current.user.id, action: "seller.settings_updated", entityType: "seller_profile", entityId: result.profile.id });
+  await logActivity({ actorId: current.user.id, action: "seller.settings_updated", entityType: "seller_profile", entityId: result.id });
   return NextResponse.redirect(new URL("/seller/settings?updated=1", request.url), { status: 303 });
 }

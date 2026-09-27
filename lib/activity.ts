@@ -3,7 +3,7 @@ import { getDb } from "@/db";
 import { activityLogs, users } from "@/db/schema";
 
 export async function logActivity(input: {
-  actorId?: string | null;
+  actorId?: number | string | null;
   action: string;
   entityType?: string | null;
   entityId?: string | null;
@@ -13,14 +13,14 @@ export async function logActivity(input: {
 
   try {
     await db.insert(activityLogs).values({
-      actorId: input.actorId ?? null,
+      actorId: input.actorId ? Number(input.actorId) : null,
       action: input.action,
       entityType: input.entityType ?? null,
       entityId: input.entityId ?? null,
       metadata: input.metadata ?? {}
     });
   } catch {
-    // ponytail: best-effort audit log, core flow must not fail here.
+    // best-effort audit log
   }
 }
 

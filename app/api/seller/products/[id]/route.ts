@@ -15,7 +15,7 @@ const productSchema = z.object({
   resellerPrice: z.coerce.number().int().nonnegative().optional(),
   fulfillmentType: z.enum(["auto", "manual"]),
   status: z.enum(["draft", "active", "inactive", "blocked"]),
-  categoryId: z.string().uuid().optional(),
+  categoryId: z.coerce.number().int().positive().optional(),
   isCustomPackage: z.coerce.boolean().optional()
 });
 
@@ -30,6 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const { id } = await params;
+  const idNum = Number(id);
   const form = await request.formData();
   const payload = productSchema.parse({
     name: form.get("name"),
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const updates = {
     categoryId: payload.categoryId ?? null,
     name: payload.name,
-    slug: `${slugify(payload.name)}-${id.slice(0, 4)}`,
+    slug: `${slugify(payload.name)}-${idNum}`,
     description: payload.description,
     instructions: payload.instructions ?? null,
     price: payload.price,
@@ -63,9 +64,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   };
 
   if (current.session.role === "admin") {
-    await db.update(products).set(updates).where(eq(products.id, id));
+    await db.update(products).set(updates).where(eq(products.id, idNum));
   } else {
-    await db.update(products).set({ ...updates, sellerId: sellerProfile?.id ?? null }).where(and(eq(products.id, id), eq(products.sellerId, sellerProfile?.id ?? "")));
+    await db.update(products).set({ ...updates, sellerId: sellerProfile?.id ?? null }).where(and(eq(products.id, idNum), eq(products.sellerId, sellerProfile?.id ?? "")));
   }
 
   return NextResponse.redirect(new URL(current.session.role === "admin" ? "/admin/products" : "/seller/products", request.url), { status: 303 });

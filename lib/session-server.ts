@@ -11,5 +11,6 @@ export async function getCurrentUser() {
   const user = await findUserById(session.userId);
   if (!user) return null;
 
-  return { session: { ...session, role: resolveSessionRole(session.role, user.role) }, user };
+  const validRole = (user.role === "seller" || user.role === "admin" ? user.role : "buyer") as "buyer" | "seller" | "admin";
+  return { session: { ...session, role: resolveSessionRole(session.role as any, validRole) }, user };
 }

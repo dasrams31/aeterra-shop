@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     actorId: current.user.id,
     action: "ticket.created",
     entityType: "ticket",
-    entityId: payload.orderId ?? current.user.id,
+    entityId: payload.orderId ?? String(current.user.id),
     metadata: { subject: payload.subject, hasMessage: Boolean(payload.message), orderId: payload.orderId ?? null, sellerId }
   });
 

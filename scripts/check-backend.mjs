@@ -47,9 +47,9 @@ assert.equal(productPriceForUser({ price: 10000, resellerPrice: 8000 }, { resell
 assert.equal(productPriceForUser({ price: 10000, resellerPrice: null }, { resellerStatus: "approved" }), 10000);
 assert.deepEqual(calculateMarketplaceCommission(9999, 1000), { grossAmount: 9999, platformFee: 999, sellerNetAmount: 9000, commissionBps: 1000 });
 assert.equal(referralCodeForUser({ id: "12345678-1234-1234-1234-123456789abc" }), "1234567812");
-assert.equal(buildReferralUrl("https://aeternumshop.biz.id", "ABC"), "https://aeternumshop.biz.id/register?ref=ABC");
-assert.equal(defaultPaymentProvider, "pakasir");
-assert.equal(isPaymentProviderConfigured("pakasir", { PAKASIR_PROJECT_SLUG: "demo" }), true);
-assert.equal(isPaymentProviderConfigured("pakasir", {}), false);
+assert.equal(buildReferralUrl("https://shop.dasrams.biz.id", "ABC"), "https://shop.dasrams.biz.id/register?ref=ABC");
+assert.equal(defaultPaymentProvider, "klikqris");
+assert.equal(isPaymentProviderConfigured("klikqris", { KLIKQRIS_API_KEY: "demo" }), true);
+assert.equal(isPaymentProviderConfigured("klikqris", { KLIKQRIS_API_KEY: "" }), false);
 
 console.log("[check-backend] ok");

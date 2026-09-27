@@ -11,7 +11,7 @@ export async function POST(request: Request) {
 
   const db = getDb();
   await db.update(users).set({ resellerStatus: "pending", updatedAt: new Date() }).where(eq(users.id, current.user.id));
-  await logActivity({ actorId: current.user.id, action: "reseller.requested", entityType: "user", entityId: current.user.id });
+  await logActivity({ actorId: current.user.id, action: "reseller.requested", entityType: "user", entityId: String(current.user.id) });
 
   return NextResponse.redirect(new URL("/dashboard/reseller", request.url), { status: 303 });
 }

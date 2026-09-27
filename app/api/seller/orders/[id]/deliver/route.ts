@@ -17,8 +17,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const { id } = await params;
+  const idNum = Number(id);
   const sellerId = current.session.role === "seller" ? (await findApprovedSellerProfileByUserId(current.user.id))?.id ?? null : null;
-  const item = await getOrderItemForSeller(id, sellerId);
+  const item = await getOrderItemForSeller(idNum, sellerId);
   if (!item || item.fulfillmentType !== "manual" || !canAccessSellerItem({ isAdmin: current.session.role === "admin", sellerId: item.sellerId, userSellerId: sellerId })) {
     return NextResponse.json({ error: "Order item not found" }, { status: 404 });
   }
@@ -26,14 +27,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const form = await request.formData();
   const raw = String(form.get("deliveryContent") ?? "");
   const deliveryContent = JSON.parse(raw) as Record<string, unknown>;
-  await submitManualDelivery(id, deliveryContent);
+  await submitManualDelivery(idNum, deliveryContent);
   const recipient = await getOrderNotificationRecipient(item.orderId);
   await sendNotificationEmail({
     to: recipient?.email,
     subject: `Pesanan ${recipient?.orderNumber ?? "Aeternum Shop"} sudah delivered`,
     text: `Pesanan manual kamu sudah delivered. Login ke dashboard order untuk melihat detail akses produk.`
   });
-  await logActivity({ actorId: current.user.id, action: "order.manual_delivered", entityType: "order_item", entityId: id, metadata: { role: current.session.role } });
+  await logActivity({ actorId: current.user.id, action: "order.manual_delivered", entityType: "order_item", entityId: String(id), metadata: { role: current.session.role } });
 
   return NextResponse.redirect(new URL(`/seller/orders/${id}`, request.url), { status: 303 });
 }

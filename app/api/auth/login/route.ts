@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   });
 
   const user = await findUserByEmail(payload.email.toLowerCase());
-  if (!user || !verifyPassword(payload.password, user.passwordHash)) {
+  if (!user || !user.passwordHash || !verifyPassword(payload.password, user.passwordHash)) {
     return NextResponse.redirect(new URL("/login?error=invalid", request.url));
   }
 
@@ -35,6 +35,6 @@ export async function POST(request: Request) {
     path: "/",
     maxAge: 60 * 60 * 24 * 7
   });
-  await logActivity({ actorId: user.id, action: "auth.login", entityType: "user", entityId: user.id, metadata: { email: user.email, role: user.role } });
+  await logActivity({ actorId: user.id, action: "auth.login", entityType: "user", entityId: String(user.id), metadata: { email: user.email, role: user.role } });
   return response;
 }

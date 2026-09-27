@@ -14,9 +14,10 @@ export default async function SellerOrderDetailPage({ params }: { params: Promis
   if (!current) notFound();
 
   const { id } = await params;
+  const idNum = Number(id);
 
   const sellerId = current.session.role === "seller" ? (await findSellerProfileByUserId(current.user.id))?.id ?? null : null;
-  const item = await getOrderItemForSeller(id, sellerId);
+  const item = await getOrderItemForSeller(idNum, sellerId);
   if (item && !canAccessSellerItem({ isAdmin: current.session.role === "admin", sellerId: item.sellerId, userSellerId: sellerId })) notFound();
   if (!item) notFound();
   const commission = calculateMarketplaceCommission(item.unitPrice * item.quantity);

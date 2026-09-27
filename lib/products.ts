@@ -6,7 +6,7 @@ export async function listMarketplaceProducts(search = "", category = "") {
   const db = getDb();
   const query = search.trim();
   const categorySlug = category.trim();
-  const filters = [eq(products.status, "active")];
+  const filters = [or(eq(products.status, "active"), eq(products.isActive, true))!];
 
   if (query) {
     filters.push(or(ilike(products.name, `%${query}%`), ilike(products.description, `%${query}%`), ilike(categories.name, `%${query}%`))!);
@@ -103,12 +103,12 @@ export async function listCustomPackages() {
     .orderBy(desc(products.createdAt));
 }
 
-export async function countAvailableStock(productId: string) {
+export async function countAvailableStock(productId: number | string) {
   const db = getDb();
   const rows = await db
     .select({ id: productStocks.id })
     .from(productStocks)
-    .where(and(eq(productStocks.productId, productId), eq(productStocks.status, "available")));
+    .where(and(eq(productStocks.productId, Number(productId)), eq(productStocks.isSold, false)));
 
   return rows.length;
 }
@@ -121,12 +121,16 @@ export async function listStocksBySellerId(sellerId: string | null) {
       productId: productStocks.productId,
       productName: products.name,
       content: productStocks.content,
-      status: productStocks.status,
+      isSold: productStocks.isSold,
       createdAt: productStocks.createdAt,
       soldAt: productStocks.soldAt
     })
     .from(productStocks)
     .innerJoin(products, eq(productStocks.productId, products.id));
 
-  return sellerId ? base.where(eq(products.sellerId, sellerId)).orderBy(desc(productStocks.createdAt)) : base.orderBy(desc(productStocks.createdAt));
+  const rows = await (sellerId ? base.where(eq(products.sellerId, sellerId)).orderBy(desc(productStocks.createdAt)) : base.orderBy(desc(productStocks.createdAt)));
+  return rows.map((r) => ({
+    ...r,
+    status: r.isSold ? "sold" : "available"
+  }));
 }

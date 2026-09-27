@@ -1,9 +1,11 @@
-import { and, asc, desc, eq, or } from "drizzle-orm";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { orderItems, orders, productStocks, products, payments, users } from "@/db/schema";
 
 export function createOrderNumber() {
-  return `INV${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const ts = Date.now().toString(36).toUpperCase();
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `SHOP-${ts}-${rand}`;
 }
 
 export async function getOrderByNumber(orderNumber: string) {
@@ -70,7 +72,7 @@ export async function getOrderDetailByNumber(orderNumber: string) {
   };
 }
 
-export async function listOrdersByBuyerId(buyerId: string) {
+export async function listOrdersByBuyerId(buyerId: number) {
   const db = getDb();
   return db.select().from(orders).where(eq(orders.buyerId, buyerId)).orderBy(desc(orders.createdAt));
 }
@@ -86,7 +88,7 @@ export async function countSoldOrderItems() {
   return rows.reduce((sum, row) => sum + row.quantity, 0);
 }
 
-export async function listPaymentsByBuyerId(buyerId: string) {
+export async function listPaymentsByBuyerId(buyerId: number) {
   const db = getDb();
   return db
     .select({
@@ -194,7 +196,7 @@ export async function setAdminOrderStatus(orderId: string, action: "cancel" | "r
   });
 }
 
-export async function getOrderItemForSeller(itemId: string, sellerId: string | null) {
+export async function getOrderItemForSeller(itemId: number, sellerId: string | null) {
   const db = getDb();
   const [item] = await db.select().from(orderItems).where(eq(orderItems.id, itemId)).limit(1);
   if (!item) return null;
@@ -202,7 +204,7 @@ export async function getOrderItemForSeller(itemId: string, sellerId: string | n
   return item;
 }
 
-export async function submitManualDelivery(itemId: string, deliveryContent: Record<string, unknown>) {
+export async function submitManualDelivery(itemId: number, deliveryContent: Record<string, unknown>) {
   const db = getDb();
   const [item] = await db.update(orderItems).set({ deliveryContent, deliveryStatus: "delivered", deliveredAt: new Date() }).where(eq(orderItems.id, itemId)).returning();
   if (!item) return null;
@@ -227,7 +229,7 @@ export async function fulfillAutoDelivery(orderId: string) {
     const [stock] = await tx
       .select()
       .from(productStocks)
-      .where(and(eq(productStocks.productId, product.id), eq(productStocks.status, "available")))
+      .where(and(eq(productStocks.productId, product.id), eq(productStocks.isSold, false)))
       .orderBy(asc(productStocks.createdAt))
       .limit(1);
 
@@ -239,14 +241,27 @@ export async function fulfillAutoDelivery(orderId: string) {
 
     const [updatedStock] = await tx
       .update(productStocks)
-      .set({ status: "sold", soldOrderItemId: item.id, soldAt: new Date() })
-      .where(and(eq(productStocks.id, stock.id), eq(productStocks.status, "available")))
+      .set({ isSold: true, transactionId: orderId, soldAt: new Date() })
+      .where(and(eq(productStocks.id, stock.id), eq(productStocks.isSold, false)))
       .returning();
 
     if (!updatedStock) return "processing" as const;
 
-    await tx.update(orderItems).set({ deliveryContent: updatedStock.content, deliveryStatus: "delivered", deliveredAt: new Date() }).where(eq(orderItems.id, item.id));
+    const deliveryContent = {
+      credentials: updatedStock.content,
+      deliveredAt: new Date().toISOString()
+    };
+
+    await tx.update(orderItems).set({ deliveryContent, deliveryStatus: "delivered", deliveredAt: new Date() }).where(eq(orderItems.id, item.id));
     await tx.update(orders).set({ status: "delivered", paidAt: new Date(), deliveredAt: new Date(), updatedAt: new Date() }).where(eq(orders.id, orderId));
+    
+    // Sync delivered content to transactions table in aeternum_premiapp_db
+    await tx.execute(sql`
+      UPDATE transactions 
+      SET delivered_content = ${updatedStock.content}, status = 'PAID', paid_at = NOW() 
+      WHERE id = ${orderId} OR gateway_reference = ${orderId};
+    `);
+
     return "delivered" as const;
   });
 }

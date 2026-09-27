@@ -1,57 +1,51 @@
-import { boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-
-export const userRoleEnum = pgEnum("user_role", ["buyer", "seller", "admin"]);
-export const resellerStatusEnum = pgEnum("reseller_status", ["none", "pending", "approved", "rejected"]);
-export const sellerStatusEnum = pgEnum("seller_status", ["pending", "approved", "suspended", "rejected"]);
-export const fulfillmentTypeEnum = pgEnum("fulfillment_type", ["auto", "manual"]);
-export const productStatusEnum = pgEnum("product_status", ["draft", "active", "inactive", "blocked"]);
-export const stockStatusEnum = pgEnum("stock_status", ["available", "reserved", "sold", "disabled"]);
-export const orderStatusEnum = pgEnum("order_status", ["pending_payment", "paid", "processing", "delivered", "cancelled", "refunded", "failed"]);
-export const deliveryStatusEnum = pgEnum("delivery_status", ["pending", "processing", "delivered", "failed"]);
-export const paymentStatusEnum = pgEnum("payment_status", ["pending", "paid", "failed", "expired", "refunded"]);
-export const ticketStatusEnum = pgEnum("ticket_status", ["open", "pending", "closed"]);
-export const blogStatusEnum = pgEnum("blog_status", ["draft", "published", "archived"]);
-export const walletTransactionTypeEnum = pgEnum("wallet_transaction_type", ["credit", "debit", "adjustment"]);
-export const withdrawalStatusEnum = pgEnum("withdrawal_status", ["requested", "approved", "paid", "rejected"]);
+import { bigint, boolean, index, integer, jsonb, numeric, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const users = pgTable(
   "users",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
+    id: bigint("id", { mode: "number" }).primaryKey(),
+    username: text("username"),
+    firstName: text("first_name"),
     name: text("name").notNull(),
-    email: text("email").notNull().unique(),
-    passwordHash: text("password_hash").notNull(),
-    role: userRoleEnum("role").notNull().default("buyer"),
+    email: text("email"),
+    passwordHash: text("password_hash"),
+    role: text("role").$type<"buyer" | "seller" | "admin">().notNull().default("buyer"),
+    isAdmin: boolean("is_admin").notNull().default(false),
+    balance: numeric("balance").$type<number>().notNull().default("0" as any),
+    referralBalance: numeric("referral_balance").$type<number>().notNull().default("0" as any),
+    totalReferrals: integer("total_referrals").notNull().default(0),
+    referredBy: bigint("referred_by", { mode: "number" }),
     isReseller: boolean("is_reseller").notNull().default(false),
-    resellerStatus: resellerStatusEnum("reseller_status").notNull().default("none"),
+    resellerStatus: text("reseller_status").$type<"none" | "pending" | "approved" | "rejected">().notNull().default("none"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => ({
-    emailIdx: uniqueIndex("users_email_idx").on(table.email)
+    emailIdx: uniqueIndex("users_email_idx").on(table.email),
+    usernameIdx: index("users_username_idx").on(table.username)
   })
 );
 
 export const sellerProfiles = pgTable(
   "seller_profiles",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+    id: text("id").primaryKey(),
+    userId: bigint("user_id", { mode: "number" }).notNull().references(() => users.id, { onDelete: "cascade" }),
     storeName: text("store_name").notNull(),
     storeSlug: text("store_slug").notNull().unique(),
     description: text("description"),
-    status: sellerStatusEnum("status").notNull().default("pending"),
+    status: text("status").$type<"pending" | "approved" | "suspended" | "rejected">().notNull().default("approved"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => ({
-    userIdx: uniqueIndex("seller_profiles_user_idx").on(table.userId),
+    userIdx: index("seller_profiles_user_idx").on(table.userId),
     slugIdx: uniqueIndex("seller_profiles_slug_idx").on(table.storeSlug)
   })
 );
 
 export const marketplaceSettings = pgTable("marketplace_settings", {
-  id: uuid("id").defaultRandom().primaryKey(),
+  id: text("id").primaryKey().default("default"),
   appName: text("app_name").notNull().default("Aeternum Shop"),
   supportEmail: text("support_email"),
   announcement: text("announcement"),
@@ -62,9 +56,11 @@ export const marketplaceSettings = pgTable("marketplace_settings", {
 export const categories = pgTable(
   "categories",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
+    id: serial("id").primaryKey(),
     name: text("name").notNull(),
-    slug: text("slug").notNull().unique(),
+    slug: text("slug").notNull(),
+    description: text("description"),
+    isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => ({
@@ -75,17 +71,20 @@ export const categories = pgTable(
 export const products = pgTable(
   "products",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    sellerId: uuid("seller_id").references(() => sellerProfiles.id, { onDelete: "set null" }),
-    categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
+    id: serial("id").primaryKey(),
+    sellerId: text("seller_id"),
+    categoryId: integer("category_id").references(() => categories.id, { onDelete: "set null" }),
     name: text("name").notNull(),
-    slug: text("slug").notNull().unique(),
+    slug: text("slug").notNull(),
     description: text("description").notNull(),
     instructions: text("instructions"),
-    price: integer("price").notNull(),
-    resellerPrice: integer("reseller_price"),
-    fulfillmentType: fulfillmentTypeEnum("fulfillment_type").notNull(),
-    status: productStatusEnum("status").notNull().default("draft"),
+    price: numeric("price").$type<number>().notNull(),
+    resellerPrice: numeric("reseller_price").$type<number>(),
+    productType: text("product_type").default("TEXT_STOCK"),
+    durationDays: integer("duration_days").default(30),
+    fulfillmentType: text("fulfillment_type").$type<"auto" | "manual">().notNull().default("auto"),
+    status: text("status").$type<"draft" | "active" | "inactive" | "blocked">().notNull().default("active"),
+    isActive: boolean("is_active").notNull().default(true),
     isCustomPackage: boolean("is_custom_package").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
@@ -93,35 +92,37 @@ export const products = pgTable(
   (table) => ({
     slugIdx: uniqueIndex("products_slug_idx").on(table.slug),
     statusIdx: index("products_status_idx").on(table.status),
-    sellerIdx: index("products_seller_idx").on(table.sellerId)
+    categoryIdx: index("products_category_idx").on(table.categoryId)
   })
 );
 
 export const productStocks = pgTable(
-  "product_stocks",
+  "product_items",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-    content: jsonb("content").notNull(),
-    status: stockStatusEnum("status").notNull().default("available"),
-    soldOrderItemId: uuid("sold_order_item_id"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    soldAt: timestamp("sold_at", { withTimezone: true })
+    id: serial("id").primaryKey(),
+    productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    isSold: boolean("is_sold").notNull().default(false),
+    soldAt: timestamp("sold_at", { withTimezone: true }),
+    transactionId: text("transaction_id"),
+    reservedByTrx: text("reserved_by_trx"),
+    reservedUntil: timestamp("reserved_until", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => ({
     productIdx: index("product_stocks_product_idx").on(table.productId),
-    statusIdx: index("product_stocks_status_idx").on(table.status)
+    soldIdx: index("product_stocks_sold_idx").on(table.isSold)
   })
 );
 
 export const orders = pgTable(
   "orders",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    buyerId: uuid("buyer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    id: text("id").primaryKey(),
+    buyerId: bigint("buyer_id", { mode: "number" }).notNull().references(() => users.id, { onDelete: "cascade" }),
     orderNumber: text("order_number").notNull().unique(),
-    status: orderStatusEnum("status").notNull().default("pending_payment"),
-    totalAmount: integer("total_amount").notNull(),
+    status: text("status").$type<"pending_payment" | "paid" | "processing" | "delivered" | "cancelled" | "refunded" | "failed">().notNull().default("pending_payment"),
+    totalAmount: numeric("total_amount").$type<number>().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     paidAt: timestamp("paid_at", { withTimezone: true }),
@@ -137,34 +138,35 @@ export const orders = pgTable(
 export const orderItems = pgTable(
   "order_items",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
-    productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "restrict" }),
-    sellerId: uuid("seller_id").references(() => sellerProfiles.id, { onDelete: "set null" }),
+    id: serial("id").primaryKey(),
+    orderId: text("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    productId: integer("product_id").notNull().references(() => products.id, { onDelete: "restrict" }),
+    sellerId: text("seller_id"),
     quantity: integer("quantity").notNull().default(1),
-    unitPrice: integer("unit_price").notNull(),
-    fulfillmentType: fulfillmentTypeEnum("fulfillment_type").notNull(),
+    unitPrice: numeric("unit_price").$type<number>().notNull(),
+    fulfillmentType: text("fulfillment_type").$type<"auto" | "manual">().notNull().default("auto"),
     deliveryContent: jsonb("delivery_content"),
-    deliveryStatus: deliveryStatusEnum("delivery_status").notNull().default("pending"),
+    deliveryStatus: text("delivery_status").$type<"pending" | "processing" | "delivered" | "failed">().notNull().default("pending"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     deliveredAt: timestamp("delivered_at", { withTimezone: true })
   },
   (table) => ({
     orderIdx: index("order_items_order_idx").on(table.orderId),
-    sellerIdx: index("order_items_seller_idx").on(table.sellerId)
+    productIdx: index("order_items_product_idx").on(table.productId)
   })
 );
 
 export const payments = pgTable(
   "payments",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
-    provider: text("provider").notNull().default("pakasir"),
-    providerReference: text("provider_reference").unique(),
+    id: serial("id").primaryKey(),
+    orderId: text("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull().default("klikqris"),
+    providerReference: text("provider_reference"),
     paymentUrl: text("payment_url"),
-    amount: integer("amount").notNull(),
-    status: paymentStatusEnum("status").notNull().default("pending"),
+    qrisImage: text("qris_image"),
+    amount: numeric("amount").$type<number>().notNull(),
+    status: text("status").$type<"pending" | "paid" | "failed" | "expired" | "refunded">().notNull().default("pending"),
     rawPayload: jsonb("raw_payload"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     paidAt: timestamp("paid_at", { withTimezone: true }),
@@ -172,13 +174,14 @@ export const payments = pgTable(
   },
   (table) => ({
     orderIdx: index("payments_order_idx").on(table.orderId),
-    referenceIdx: uniqueIndex("payments_reference_idx").on(table.providerReference)
+    referenceIdx: index("payments_reference_idx").on(table.providerReference)
   })
 );
 
 export const paymentEvents = pgTable("payment_events", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  paymentId: uuid("payment_id").references(() => payments.id, { onDelete: "cascade" }),
+  id: serial("id").primaryKey(),
+  paymentId: integer("payment_id").references(() => payments.id, { onDelete: "cascade" }),
+  transactionId: text("transaction_id"),
   provider: text("provider").notNull(),
   eventType: text("event_type"),
   payload: jsonb("payload").notNull(),
@@ -188,13 +191,15 @@ export const paymentEvents = pgTable("payment_events", {
 export const reviews = pgTable(
   "reviews",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-    orderItemId: uuid("order_item_id").notNull().references(() => orderItems.id, { onDelete: "cascade" }).unique(),
-    buyerId: uuid("buyer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    id: serial("id").primaryKey(),
+    productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+    orderItemId: integer("order_item_id").references(() => orderItems.id, { onDelete: "set null" }),
+    transactionId: text("transaction_id"),
+    buyerId: bigint("user_id", { mode: "number" }).notNull().references(() => users.id, { onDelete: "cascade" }),
     rating: integer("rating").notNull(),
     comment: text("comment"),
     isHidden: boolean("is_hidden").notNull().default(false),
+    isPostedToChannel: boolean("is_posted_to_channel").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
@@ -206,27 +211,26 @@ export const reviews = pgTable(
 export const tickets = pgTable(
   "tickets",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    buyerId: uuid("buyer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
-    sellerId: uuid("seller_id").references(() => sellerProfiles.id, { onDelete: "set null" }),
+    id: serial("id").primaryKey(),
+    buyerId: bigint("buyer_id", { mode: "number" }).notNull().references(() => users.id, { onDelete: "cascade" }),
+    orderId: text("order_id").references(() => orders.id, { onDelete: "set null" }),
+    sellerId: text("seller_id"),
     subject: text("subject").notNull(),
-    status: ticketStatusEnum("status").notNull().default("open"),
+    status: text("status").$type<"open" | "pending" | "closed">().notNull().default("open"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     closedAt: timestamp("closed_at", { withTimezone: true })
   },
   (table) => ({
     buyerIdx: index("tickets_buyer_idx").on(table.buyerId),
-    sellerIdx: index("tickets_seller_idx").on(table.sellerId),
     statusIdx: index("tickets_status_idx").on(table.status)
   })
 );
 
 export const ticketMessages = pgTable("ticket_messages", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  ticketId: uuid("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
-  senderId: uuid("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+  senderId: bigint("sender_user_id", { mode: "number" }).notNull().references(() => users.id, { onDelete: "cascade" }),
   message: text("message").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
@@ -234,12 +238,12 @@ export const ticketMessages = pgTable("ticket_messages", {
 export const sellerWithdrawalRequests = pgTable(
   "seller_withdrawal_requests",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    sellerId: uuid("seller_id").notNull().references(() => sellerProfiles.id, { onDelete: "cascade" }),
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    ticketId: uuid("ticket_id").references(() => tickets.id, { onDelete: "set null" }),
-    amount: integer("amount").notNull(),
-    status: withdrawalStatusEnum("status").notNull().default("requested"),
+    id: text("id").primaryKey(),
+    sellerId: text("seller_id").notNull(),
+    userId: bigint("user_id", { mode: "number" }).notNull().references(() => users.id, { onDelete: "cascade" }),
+    ticketId: integer("ticket_id").references(() => tickets.id, { onDelete: "set null" }),
+    amount: numeric("amount").$type<number>().notNull(),
+    status: text("status").$type<"requested" | "approved" | "paid" | "rejected">().notNull().default("requested"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     paidAt: timestamp("paid_at", { withTimezone: true })
@@ -253,14 +257,14 @@ export const sellerWithdrawalRequests = pgTable(
 export const sellerWalletTransactions = pgTable(
   "seller_wallet_transactions",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    sellerId: uuid("seller_id").notNull().references(() => sellerProfiles.id, { onDelete: "cascade" }),
-    orderItemId: uuid("order_item_id").references(() => orderItems.id, { onDelete: "set null" }),
-    withdrawalRequestId: uuid("withdrawal_request_id").references(() => sellerWithdrawalRequests.id, { onDelete: "set null" }),
-    type: walletTransactionTypeEnum("type").notNull(),
-    grossAmount: integer("gross_amount").notNull().default(0),
-    platformFee: integer("platform_fee").notNull().default(0),
-    netAmount: integer("net_amount").notNull(),
+    id: serial("id").primaryKey(),
+    sellerId: text("seller_id").notNull(),
+    orderItemId: integer("order_item_id").references(() => orderItems.id, { onDelete: "set null" }),
+    withdrawalRequestId: text("withdrawal_request_id").references(() => sellerWithdrawalRequests.id, { onDelete: "set null" }),
+    type: text("type").$type<"credit" | "debit" | "adjustment">().notNull(),
+    grossAmount: numeric("gross_amount").$type<number>().notNull().default(0 as any),
+    platformFee: numeric("platform_fee").$type<number>().notNull().default(0 as any),
+    netAmount: numeric("net_amount").$type<number>().notNull(),
     note: text("note"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },
@@ -273,13 +277,13 @@ export const sellerWalletTransactions = pgTable(
 export const blogPosts = pgTable(
   "blog_posts",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    authorId: uuid("author_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    id: serial("id").primaryKey(),
+    authorId: bigint("author_id", { mode: "number" }).notNull().references(() => users.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     slug: text("slug").notNull().unique(),
     excerpt: text("excerpt"),
     content: text("content").notNull(),
-    status: blogStatusEnum("status").notNull().default("draft"),
+    status: text("status").$type<"draft" | "published" | "archived">().notNull().default("draft"),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
@@ -293,12 +297,12 @@ export const blogPosts = pgTable(
 export const activityLogs = pgTable(
   "activity_logs",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
+    id: serial("id").primaryKey(),
+    actorId: bigint("actor_id", { mode: "number" }).references(() => users.id, { onDelete: "set null" }),
     action: text("action").notNull(),
     entityType: text("entity_type"),
     entityId: text("entity_id"),
-    metadata: jsonb("metadata").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => ({
@@ -309,7 +313,7 @@ export const activityLogs = pgTable(
 );
 
 export const faqItems = pgTable("faq_items", {
-  id: uuid("id").defaultRandom().primaryKey(),
+  id: serial("id").primaryKey(),
   question: text("question").notNull(),
   answer: text("answer").notNull(),
   isActive: boolean("is_active").notNull().default(true),

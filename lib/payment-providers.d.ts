@@ -1,3 +1,3 @@
-export const defaultPaymentProvider: "pakasir";
-export const paymentProviders: Array<{ id: "pakasir"; label: string; envKey: string }>;
-export function isPaymentProviderConfigured(provider: string, env?: Record<string, string | undefined>): boolean;
+export const defaultPaymentProvider: "klikqris";
+export const paymentProviders: Array<{ id: "klikqris"; label: string; envKey: string }>;
+export function isPaymentProviderConfigured(provider: string, env?: NodeJS.ProcessEnv): boolean;

@@ -2,7 +2,7 @@ import { asc, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { orderItems, orders, sellerProfiles, ticketMessages, tickets, users } from "@/db/schema";
 
-export async function listTicketsByBuyerId(buyerId: string) {
+export async function listTicketsByBuyerId(buyerId: number) {
   const db = getDb();
 
   return db
@@ -59,8 +59,9 @@ export async function listTicketsBySellerId(sellerId: string | null) {
   return sellerId ? base.where(eq(tickets.sellerId, sellerId)).orderBy(desc(tickets.createdAt)) : base.orderBy(desc(tickets.createdAt));
 }
 
-export async function getTicketDetail(ticketId: string) {
+export async function getTicketDetail(ticketId: number | string) {
   const db = getDb();
+  const idNum = Number(ticketId);
   const [ticket] = await db
     .select({
       id: tickets.id,
@@ -78,7 +79,7 @@ export async function getTicketDetail(ticketId: string) {
     .innerJoin(users, eq(tickets.buyerId, users.id))
     .leftJoin(orders, eq(tickets.orderId, orders.id))
     .leftJoin(sellerProfiles, eq(tickets.sellerId, sellerProfiles.id))
-    .where(eq(tickets.id, ticketId))
+    .where(eq(tickets.id, idNum))
     .limit(1);
   if (!ticket) return null;
 
@@ -92,24 +93,42 @@ export async function getTicketDetail(ticketId: string) {
     })
     .from(ticketMessages)
     .innerJoin(users, eq(ticketMessages.senderId, users.id))
-    .where(eq(ticketMessages.ticketId, ticketId))
+    .where(eq(ticketMessages.ticketId, idNum))
     .orderBy(asc(ticketMessages.createdAt));
 
   return { ticket, messages };
 }
 
-export async function addTicketMessage(ticketId: string, senderId: string, message: string) {
+export async function addTicketMessage(ticketId: number | string, senderId: number, message: string) {
   const db = getDb();
-  await db.insert(ticketMessages).values({ ticketId, senderId, message });
-  await db.update(tickets).set({ status: "pending", updatedAt: new Date() }).where(eq(tickets.id, ticketId));
+  const idNum = Number(ticketId);
+  await db.insert(ticketMessages).values({ ticketId: idNum, senderId, message });
+  await db.update(tickets).set({ status: "pending", updatedAt: new Date() }).where(eq(tickets.id, idNum));
 }
 
-export async function updateTicketStatus(ticketId: string, status: "open" | "pending" | "closed") {
+export async function updateTicketStatus(ticketId: number | string, status: "open" | "pending" | "closed") {
   const db = getDb();
-  await db.update(tickets).set({ status, closedAt: status === "closed" ? new Date() : null, updatedAt: new Date() }).where(eq(tickets.id, ticketId));
+  const idNum = Number(ticketId);
+  await db.update(tickets).set({ status, closedAt: status === "closed" ? new Date() : null, updatedAt: new Date() }).where(eq(tickets.id, idNum));
 }
 
-export async function createTicket(input: { buyerId: string; subject: string; message?: string | null; orderId?: string | null; sellerId?: string | null }) {
+export async function getSellerIdForOrder(orderId: string) {
+  const db = getDb();
+  const [item] = await db
+    .select({ sellerId: orderItems.sellerId })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId))
+    .limit(1);
+  return item?.sellerId ?? null;
+}
+
+export async function createTicket(input: {
+  buyerId: number;
+  subject: string;
+  message?: string | null;
+  orderId?: string | null;
+  sellerId?: string | null;
+}) {
   const db = getDb();
   const [ticket] = await db.transaction(async (tx) => {
     const rows = await tx
@@ -118,22 +137,21 @@ export async function createTicket(input: { buyerId: string; subject: string; me
         buyerId: input.buyerId,
         orderId: input.orderId ?? null,
         sellerId: input.sellerId ?? null,
-        subject: input.subject
+        subject: input.subject,
+        status: "open"
       })
       .returning();
 
     if (rows[0] && input.message?.trim()) {
-      await tx.insert(ticketMessages).values({ ticketId: rows[0].id, senderId: input.buyerId, message: input.message.trim() });
+      await tx.insert(ticketMessages).values({
+        ticketId: rows[0].id,
+        senderId: input.buyerId,
+        message: input.message.trim()
+      });
     }
 
     return rows;
   });
 
   return ticket ?? null;
-}
-
-export async function getSellerIdForOrder(orderId: string) {
-  const db = getDb();
-  const [item] = await db.select({ sellerId: orderItems.sellerId }).from(orderItems).where(eq(orderItems.orderId, orderId)).limit(1);
-  return item?.sellerId ?? null;
 }

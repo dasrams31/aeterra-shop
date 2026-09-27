@@ -32,12 +32,12 @@ export async function getReferralStatsForCode(code: string, limit = 5) {
   return { count: Number(summary?.count ?? 0), orderCount: Number(orders?.count ?? 0), revenue: Number(orders?.revenue ?? 0), rows };
 }
 
-export async function getReferralCodeForUserSignup(userId: string) {
+export async function getReferralCodeForUserSignup(userId: number | string) {
   const db = getDb();
   const [activity] = await db
     .select({ referralCode: sql<string | null>`${activityLogs.metadata} ->> 'referralCode'` })
     .from(activityLogs)
-    .where(and(eq(activityLogs.action, "auth.register"), eq(activityLogs.actorId, userId)))
+    .where(and(eq(activityLogs.action, "auth.register"), eq(activityLogs.actorId, Number(userId))))
     .orderBy(desc(activityLogs.createdAt))
     .limit(1);
 

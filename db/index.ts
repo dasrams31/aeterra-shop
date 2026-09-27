@@ -11,7 +11,7 @@ export function getDb() {
     throw new Error("DATABASE_URL is not set");
   }
 
-  const client = postgres(url, { max: 1 });
+  const client = postgres(url, { max: 1, idle_timeout: 1, connect_timeout: 5 });
   dbInstance = drizzle(client);
   return dbInstance;
 }
