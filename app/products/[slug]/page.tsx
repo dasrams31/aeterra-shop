@@ -1,25 +1,26 @@
 import { notFound } from "next/navigation";
-import { getProductBySlug } from "@/lib/products";
+import { getProductBySlug, countAvailableStock } from "@/lib/products";
 import { productPriceForUser } from "@/lib/pricing.js";
 import { getReviewSummaryByProductId, listReviewsByProductId } from "@/lib/reviews";
 import { getCurrentUser } from "@/lib/session-server";
 import { getMarketplaceSettings } from "@/lib/sellers";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 const formatMoney = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
 
 const checkoutSteps = [
-  "Login atau daftar akun buyer",
-  "Klik lanjut bayar dan selesaikan pembayaran Pakasir",
-  "Cek akses produk dari dashboard order setelah status sukses"
+  "Pilih metode pembayaran (QRIS Dinamis atau Saldo Dompet).",
+  "Scan QRIS instan dari semua e-wallet (GoPay, OVO, DANA, BCA, ShopeePay).",
+  "Kredensial atau lisensi akun langsung dikirim otomatis ke akun & Telegram."
 ];
 
 const productHighlights = [
-  "Invoice bisa dilacak",
-  "Riwayat order tersimpan",
-  "Bisa buka ticket support",
-  "Review hanya dari pembeli"
+  "⚡ Auto-Delivery Instan 1 Detik",
+  "🛡️ Garansi Penuh Akun & Lisensi",
+  "🧾 Invoice & Riwayat Terverifikasi",
+  "💬 Support Chat 24/7 Terbuka"
 ];
 
 function stars(rating: number) {
@@ -34,121 +35,243 @@ export default async function ProductDetailPage({
   const { slug } = await params;
   const product = await getProductBySlug(slug);
   if (!product) notFound();
+
   const current = await getCurrentUser();
   const settings = await getMarketplaceSettings().catch(() => null);
   const price = productPriceForUser(product, current?.user);
   const hasResellerPrice = price !== product.price;
   const reviewSummary = await getReviewSummaryByProductId(product.id);
-  const reviews = await listReviewsByProductId(product.id, 3);
+  const reviews = await listReviewsByProductId(product.id, 5);
+  const availableStock = await countAvailableStock(product.id);
+
   const deliveryCopy = product.fulfillmentType === "auto"
-    ? "Akses otomatis disiapkan setelah pembayaran terverifikasi."
-    : "Seller memproses akses manual setelah pembayaran masuk.";
+    ? "Kredensial atau akses otomatis dikirimkan ke layar dan bot Telegram begitu pembayaran QRIS sukses."
+    : "Pesanan diproses langsung oleh admin/seller dengan garansi penuh.";
+
+  const userBalance = Number(current?.user?.balance ?? 0);
+  const hasEnoughBalance = userBalance >= price;
 
   return (
-    <main className="aeternum-bg min-h-screen px-6 py-10 text-text">
-      <div className="mx-auto max-w-6xl">
-        <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
-          <div className="hero-card reveal-up rounded-xl2 border-[3px] border-border p-6 shadow-soft md:p-8">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-primary">Produk digital siap pakai</p>
-            <h1 className="mt-3 text-4xl font-black leading-[0.95] tracking-tight md:text-6xl">{product.name}</h1>
-            <p className="mt-5 max-w-2xl text-base leading-8 text-muted">{product.description}</p>
-            <div className="mt-5 flex flex-wrap gap-2 text-xs text-muted">
-              {product.categoryName ? <span className="lift rounded-full border-[2px] border-border bg-white px-3 py-1 font-black">{product.categoryName}</span> : null}
-              <span className="lift rounded-full border-[2px] border-border bg-white px-3 py-1 font-black">{product.fulfillmentType === "auto" ? "Akses cepat" : "Diproses seller"}</span>
-              <span className="lift rounded-full border-[2px] border-border bg-white px-3 py-1 font-black">Support order</span>
-              {product.isCustomPackage ? <span className="lift rounded-full border-[2px] border-border bg-white px-3 py-1 font-black">Paket khusus</span> : null}
-            </div>
-            <div className="mt-6 grid gap-3 md:grid-cols-2">
-              {productHighlights.map((item) => (
-                <div key={item} className="rounded-xl border-[2px] border-border bg-white p-3 text-sm font-black shadow-soft">
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
+    <main className="min-h-screen px-4 py-8 md:px-6 md:py-12 bg-background text-text">
+      <div className="mx-auto max-w-6xl space-y-8">
+        
+        {/* Navigation Breadcrumb */}
+        <div className="flex items-center gap-2 text-xs font-medium text-muted">
+          <Link href="/marketplace" className="hover:text-text transition-colors">Marketplace</Link>
+          <span>/</span>
+          {product.categoryName && (
+            <>
+              <Link href={`/marketplace?category=${product.categorySlug}`} className="hover:text-text transition-colors">
+                {product.categoryName}
+              </Link>
+              <span>/</span>
+            </>
+          )}
+          <span className="text-text font-semibold truncate max-w-xs">{product.name}</span>
+        </div>
 
-          <form className="sticky top-6 rounded-xl2 border-[3px] border-border bg-white p-5 shadow-soft" method="post" action="/api/checkout">
-            <input type="hidden" name="productId" value={product.id} />
-            <input type="hidden" name="quantity" value={1} />
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-muted">Checkout</p>
-            <p className="mt-2 text-3xl font-black">{formatMoney.format(price)}</p>
-            {hasResellerPrice ? <p className="mt-1 text-sm font-semibold text-primary">Harga reseller aktif</p> : product.resellerPrice ? <p className="mt-1 text-sm font-semibold text-muted">Harga reseller tersedia: {formatMoney.format(product.resellerPrice)}</p> : null}
-            <div className="mt-4 rounded-xl border-[2px] border-border bg-surfaceSoft p-4">
-              <p className="text-sm font-black">Yang terjadi setelah bayar</p>
-              <p className="mt-2 text-sm leading-6 text-muted">{deliveryCopy}</p>
-            </div>
-            {settings?.checkoutEnabled === false ? (
-              <div className="mt-4 rounded-xl border-[2px] border-border bg-surfaceSoft p-3 text-sm font-semibold text-muted">Checkout sedang dinonaktifkan admin.</div>
-            ) : (
-              <button className="lift shine mt-4 w-full rounded-xl border-[3px] border-border bg-primary px-4 py-3 text-sm font-black text-white shadow-soft">Lanjut ke Pembayaran Pakasir</button>
-            )}
-            <p className="mt-3 text-center text-xs leading-5 text-muted">Belum login? Kamu akan diarahkan ke login agar invoice dan akses produk tersimpan di akun.</p>
-          </form>
-        </section>
-
-        <section className="mt-6 grid gap-3 md:grid-cols-3">
-          <div className="lift rounded-xl2 border-[3px] border-border bg-white p-4 shadow-soft">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Akses produk</p>
-            <p className="mt-2 text-sm leading-6 text-muted">{deliveryCopy}</p>
-          </div>
-          <div className="lift rounded-xl2 border-[3px] border-border bg-white p-4 shadow-soft">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Pembayaran</p>
-            <p className="mt-2 text-sm leading-6 text-muted">Checkout memakai Pakasir. Status pembayaran tersimpan di dashboard dan invoice tracker.</p>
-          </div>
-          <div className="lift rounded-xl2 border-[3px] border-border bg-white p-4 shadow-soft">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Bantuan</p>
-            <p className="mt-2 text-sm leading-6 text-muted">Kalau akses belum masuk atau ada kendala, buka ticket dari halaman order.</p>
-          </div>
-        </section>
-
-        <section className="mt-6 grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-          <div className="hero-card rounded-xl2 border-[3px] border-border p-5 shadow-soft">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-muted">Cara beli</p>
-            <div className="mt-4 space-y-3">
-              {checkoutSteps.map((step, index) => (
-                <div key={step} className="flex gap-3 rounded-xl border-[2px] border-border bg-white p-3">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full border-[2px] border-border bg-primary text-sm font-black text-white">{index + 1}</span>
-                  <p className="text-sm font-semibold leading-6">{step}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-xl2 border-[3px] border-border bg-white p-5 shadow-soft">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-muted">Detail dan instruksi</p>
-            {product.instructions ? (
-              <p className="mt-4 whitespace-pre-line text-sm leading-7 text-muted">{product.instructions}</p>
-            ) : (
-              <p className="mt-4 text-sm leading-7 text-muted">Instruksi produk akan tampil di halaman order setelah pembelian selesai.</p>
-            )}
-          </div>
-        </section>
-
-        <section className="mt-6 rounded-xl2 border-[3px] border-border bg-white p-5 shadow-soft">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        {/* Main Product Info & Checkout Box */}
+        <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-start">
+          
+          {/* Left: Product Hero Info */}
+          <div className="rounded-3xl border border-border bg-white p-6 md:p-8 shadow-soft space-y-6">
             <div>
-              <p className="text-sm font-black uppercase tracking-[0.18em] text-muted">Rating dan komentar</p>
-              <p className="mt-2 text-3xl font-black">
-                {reviewSummary.count === 0 ? "Belum ada review" : `${reviewSummary.average.toFixed(1)}/5`}
-              </p>
-              <p className="mt-1 text-sm text-muted">{reviewSummary.count === 0 ? "Review muncul setelah pembeli menerima produk." : `${reviewSummary.count} komentar dari pembeli terverifikasi.`}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {product.categoryName && (
+                  <span className="rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-bold">
+                    {product.categoryName}
+                  </span>
+                )}
+                <span className="rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-3 py-1 text-xs font-bold">
+                  {product.fulfillmentType === "auto" ? "⚡ Auto-Delivery" : "🛠️ Manual Process"}
+                </span>
+                <span className="rounded-full bg-surfaceSoft border border-border px-3 py-1 text-xs font-medium text-muted">
+                  Stok Tersedia: <b className="text-text">{availableStock}</b>
+                </span>
+              </div>
+
+              <h1 className="mt-4 text-3xl md:text-4xl font-extrabold tracking-tight text-text leading-tight">
+                {product.name}
+              </h1>
+
+              {reviewSummary.count > 0 && (
+                <div className="mt-3 flex items-center gap-2 text-sm">
+                  <span className="text-amber-400 font-bold tracking-widest">{stars(Math.round(reviewSummary.average))}</span>
+                  <span className="font-bold text-text">{reviewSummary.average.toFixed(1)}</span>
+                  <span className="text-xs text-muted">({reviewSummary.count} ulasan)</span>
+                </div>
+              )}
             </div>
-            <span className="rounded-full border-[2px] border-border bg-surfaceSoft px-4 py-2 text-sm font-black text-primary">
-              {reviewSummary.count === 0 ? "☆☆☆☆☆" : stars(Math.round(reviewSummary.average))}
-            </span>
+
+            {/* Description Card */}
+            <div className="border-t border-border pt-6">
+              <h2 className="text-sm font-bold text-text uppercase tracking-wider mb-3">Deskripsi Produk</h2>
+              <div className="prose prose-sm max-w-none text-muted leading-relaxed whitespace-pre-line text-sm">
+                {product.description}
+              </div>
+            </div>
+
+            {/* Instructions if available */}
+            {product.instructions && (
+              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5 space-y-2">
+                <h3 className="text-xs font-bold text-primary uppercase tracking-wider">Instruksi Penggunaan & Aktivasi</h3>
+                <p className="text-xs text-text leading-relaxed whitespace-pre-line font-medium">
+                  {product.instructions}
+                </p>
+              </div>
+            )}
+
+            {/* Feature Highlights Grid */}
+            <div className="grid gap-3 sm:grid-cols-2 pt-2">
+              {productHighlights.map((item) => (
+                <div key={item} className="flex items-center gap-2.5 rounded-xl border border-border bg-surfaceSoft p-3 text-xs font-semibold text-text">
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          {reviews.length > 0 ? (
-            <div className="mt-5 grid gap-3 md:grid-cols-3">
-              {reviews.map((review) => (
-                <article key={review.id} className="lift rounded-xl border-[2px] border-border bg-surfaceSoft p-4 text-sm text-muted">
-                  <p className="font-black text-primary">{stars(review.rating)}</p>
-                  <p className="mt-2 font-semibold text-text">{review.buyerName}</p>
-                  {review.comment ? <p className="mt-2 whitespace-pre-line leading-6">{review.comment}</p> : null}
+
+          {/* Right: Checkout Action Card */}
+          <div className="sticky top-6 rounded-3xl border border-border bg-white p-6 shadow-soft space-y-6">
+            <div>
+              <span className="text-xs font-bold text-muted uppercase tracking-wider">Harga Produk</span>
+              <div className="mt-1 flex items-baseline gap-2">
+                <p className="text-3xl md:text-4xl font-black text-text tabular-nums">
+                  {formatMoney.format(price)}
+                </p>
+                {hasResellerPrice && (
+                  <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                    Harga Reseller Aktif
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <form className="space-y-4" method="post" action="/api/checkout">
+              <input type="hidden" name="productId" value={product.id} />
+              <input type="hidden" name="quantity" value={1} />
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-text uppercase tracking-wider">Metode Pembayaran</label>
+                
+                {/* QRIS Option */}
+                <label className="flex items-center justify-between p-3.5 rounded-xl border border-border bg-surfaceSoft cursor-pointer hover:border-primary transition-all">
+                  <div className="flex items-center gap-3">
+                    <input type="radio" name="paymentMethod" value="QRIS" defaultChecked className="accent-primary" />
+                    <div>
+                      <p className="text-sm font-bold text-text">QRIS Dinamis (KlikQRIS)</p>
+                      <p className="text-[11px] text-muted">GoPay, OVO, DANA, BCA, ShopeePay</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded">Instan</span>
+                </label>
+
+                {/* Balance Option */}
+                <label className={`flex items-center justify-between p-3.5 rounded-xl border transition-all ${
+                  hasEnoughBalance 
+                    ? "border-border bg-surfaceSoft cursor-pointer hover:border-primary" 
+                    : "border-border/60 bg-surfaceSoft/50 opacity-60"
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="radio" 
+                      name="paymentMethod" 
+                      value="BALANCE" 
+                      disabled={!hasEnoughBalance}
+                      className="accent-primary" 
+                    />
+                    <div>
+                      <p className="text-sm font-bold text-text">Saldo Dompet Internal</p>
+                      <p className="text-[11px] text-muted">
+                        Saldo Anda: <b>{formatMoney.format(userBalance)}</b>
+                      </p>
+                    </div>
+                  </div>
+                  {hasEnoughBalance ? (
+                    <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">Cukup</span>
+                  ) : (
+                    <span className="text-xs font-medium text-amber-600">Kurang</span>
+                  )}
+                </label>
+              </div>
+
+              {settings?.checkoutEnabled === false ? (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-center text-xs font-semibold text-amber-600">
+                  Checkout sedang dinonaktifkan oleh administrator.
+                </div>
+              ) : availableStock <= 0 && product.fulfillmentType === "auto" ? (
+                <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 text-center text-xs font-semibold text-rose-600">
+                  ⚠️ Mohon maaf, stok produk ini sedang kosong.
+                </div>
+              ) : (
+                <button
+                  type="submit"
+                  className="w-full rounded-xl bg-primary px-5 py-3.5 text-sm font-bold text-white shadow-md hover:opacity-95 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <span>Lanjut ke Pembayaran QRIS</span>
+                  <span>→</span>
+                </button>
+              )}
+
+              {!current && (
+                <p className="text-center text-[11px] text-muted">
+                  *Kamu akan diarahkan ke login/registrasi agar pesanan & lisensi tersimpan otomatis.
+                </p>
+              )}
+            </form>
+
+            <div className="rounded-2xl bg-surfaceSoft p-4 border border-border space-y-2 text-xs">
+              <p className="font-bold text-text">ℹ️ Informasi Pengiriman:</p>
+              <p className="text-muted leading-relaxed">{deliveryCopy}</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Steps Guide */}
+        <section className="rounded-3xl border border-border bg-white p-6 md:p-8 shadow-soft space-y-6">
+          <h2 className="text-lg font-bold text-text">3 Langkah Mudah Berbelanja</h2>
+          <div className="grid gap-4 md:grid-cols-3">
+            {checkoutSteps.map((step, idx) => (
+              <div key={step} className="flex items-start gap-3.5 rounded-2xl border border-border bg-surfaceSoft p-4">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-white">
+                  {idx + 1}
+                </span>
+                <p className="text-xs font-medium text-text leading-relaxed mt-0.5">{step}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Customer Reviews Section */}
+        {reviews.length > 0 && (
+          <section className="rounded-3xl border border-border bg-white p-6 md:p-8 shadow-soft space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-text">Ulasan Pelanggan</h2>
+                <p className="text-xs text-muted mt-0.5">Testimoni nyata dari pembeli produk ini</p>
+              </div>
+              <div className="text-right">
+                <span className="text-amber-400 font-bold tracking-widest text-sm">{stars(Math.round(reviewSummary.average))}</span>
+                <span className="ml-1 text-xs font-bold text-text">{reviewSummary.average.toFixed(1)} / 5.0</span>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              {reviews.map((rev) => (
+                <article key={rev.id} className="rounded-2xl border border-border bg-surfaceSoft p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-text">{rev.buyerName}</span>
+                    <span className="text-xs text-amber-500 font-semibold">{stars(rev.rating)}</span>
+                  </div>
+                  {rev.comment && (
+                    <p className="text-xs text-muted leading-relaxed italic">"{rev.comment}"</p>
+                  )}
                 </article>
               ))}
             </div>
-          ) : null}
-        </section>
+          </section>
+        )}
+
       </div>
     </main>
   );
