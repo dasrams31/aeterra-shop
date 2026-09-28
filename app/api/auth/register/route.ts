@@ -28,7 +28,19 @@ export async function POST(request: Request) {
   const userId = Math.floor(Date.now() / 1000) * 1000 + Math.floor(Math.random() * 1000);
   const [user] = await db
     .insert(users)
-    .values({ id: userId, name: payload.name, email: payload.email.toLowerCase(), passwordHash })
+    .values({
+      id: userId,
+      name: payload.name,
+      email: payload.email.toLowerCase(),
+      passwordHash,
+      isAdmin: false,
+      balance: 0,
+      referralBalance: 0,
+      totalReferrals: 0,
+      role: "buyer",
+      isReseller: false,
+      resellerStatus: "none",
+    })
     .returning();
 
   const targetPath = user.role === "seller" ? "/seller" : user.role === "admin" ? "/admin" : "/dashboard";
