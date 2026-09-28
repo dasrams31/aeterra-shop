@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/session-server";
-import { applySellerProfile } from "@/lib/sellers";
+import { applySellerProfile, isStoreSlugAvailable } from "@/lib/sellers";
 import { slugify } from "@/lib/slug";
-import { getDb } from "@/db";
-import { users } from "@/db/schema";
-import { eq } from "drizzle-orm";
 import { logActivity } from "@/lib/activity";
+import { redirectApp } from "@/lib/redirect";
 
 const applySchema = z.object({
   storeName: z.string().min(3).max(80),
@@ -16,7 +14,7 @@ const applySchema = z.object({
 
 export async function POST(request: NextRequest) {
   const current = await getCurrentUser();
-  if (!current) return NextResponse.redirect(new URL("/login", request.url));
+  if (!current) return redirectApp("/login", request);
 
   const form = await request.formData();
   const payload = applySchema.parse({
@@ -25,16 +23,27 @@ export async function POST(request: NextRequest) {
     description: form.get("description") || undefined
   });
 
-  const db = getDb();
-  await db.update(users).set({ role: "seller", updatedAt: new Date() }).where(eq(users.id, current.user.id));
+  const slug = slugify(payload.storeSlug);
+  const available = await isStoreSlugAvailable(slug, current.user.id);
+  if (!available) {
+    return redirectApp("/dashboard/profile?error=slug_taken", request);
+  }
 
   const profile = await applySellerProfile(current.user.id, {
     storeName: payload.storeName,
-    storeSlug: slugify(payload.storeSlug),
+    storeSlug: slug,
     description: payload.description ?? null
   });
 
-  await logActivity({ actorId: current.user.id, action: "seller.applied", entityType: "seller_profile", entityId: profile?.id ?? current.user.id, metadata: { storeName: payload.storeName, storeSlug: payload.storeSlug } });
+  if (profile) {
+    await logActivity({
+      actorId: current.user.id,
+      action: "seller.applied",
+      entityType: "seller_profile",
+      entityId: profile.id,
+      metadata: { storeName: payload.storeName, storeSlug: slug }
+    });
+  }
 
-  return NextResponse.redirect(new URL("/dashboard/profile?seller=applied", request.url), { status: 303 });
+  return redirectApp("/dashboard/profile?seller=applied", request);
 }

@@ -11,6 +11,7 @@ import { defaultPaymentProvider } from "@/lib/payment-providers.js";
 import { productPriceForUser } from "@/lib/pricing.js";
 import { getReferralCodeForUserSignup } from "@/lib/referrals-data";
 import { getMarketplaceSettings } from "@/lib/sellers";
+import { getAppBaseUrl, redirectApp } from "@/lib/redirect";
 import { eq, sql } from "drizzle-orm";
 
 const checkoutSchema = z.object({
@@ -22,7 +23,7 @@ const checkoutSchema = z.object({
 export async function POST(request: Request) {
   const current = await getCurrentUser();
   if (!current) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return redirectApp("/login", request);
   }
 
   const form = await request.formData();
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
   const unitPrice = productPriceForUser(product, current.user);
   const baseAmount = unitPrice * payload.quantity;
   const referralCode = await getReferralCodeForUserSignup(current.user.id);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
+  const appUrl = getAppBaseUrl(request);
 
   // Option A: Bayar dengan Saldo Internal
   if (payload.paymentMethod === "BALANCE") {
@@ -101,10 +102,10 @@ export async function POST(request: Request) {
       await tx.execute(sql`
         INSERT INTO transactions (
           id, user_id, product_id, trx_type, payment_method, 
-          original_amount, discount_amount, amount, status, paid_at, created_at
+          original_amount, discount_amount, amount, reminder_h3_sent, reminder_h1_sent, status, paid_at, created_at
         ) VALUES (
           ${orderNumber}, ${current.user.id}, ${product.id}, 'PURCHASE', 'BALANCE',
-          ${baseAmount}, 0, ${baseAmount}, 'PAID', NOW(), NOW()
+          ${baseAmount}, 0, ${baseAmount}, false, false, 'PAID', NOW(), NOW()
         ) ON CONFLICT (id) DO UPDATE SET status = 'PAID', paid_at = NOW();
       `);
 
@@ -121,7 +122,7 @@ export async function POST(request: Request) {
       metadata: { orderNumber, productId: product.id, quantity: payload.quantity, amount: baseAmount }
     });
 
-    return NextResponse.redirect(new URL(`/dashboard/orders/${orderNumber}`, request.url), { status: 303 });
+    return redirectApp(`/dashboard/orders/${orderNumber}`, request);
   }
 
   // Option B: Bayar via QRIS (KlikQRIS)
@@ -173,11 +174,11 @@ export async function POST(request: Request) {
     INSERT INTO transactions (
       id, user_id, product_id, trx_type, payment_method, 
       original_amount, discount_amount, amount, qris_string, qris_image_url, 
-      gateway_reference, status, expired_at, created_at
+      gateway_reference, reminder_h3_sent, reminder_h1_sent, status, expired_at, created_at
     ) VALUES (
       ${orderNumber}, ${current.user.id}, ${product.id}, 'PURCHASE', 'QRIS',
       ${baseAmount}, 0, ${finalAmount}, '', ${klikQrisRes.qrisUrl ?? ''},
-      ${orderNumber}, 'PENDING', NOW() + INTERVAL '1 hour', NOW()
+      ${orderNumber}, false, false, 'PENDING', NOW() + INTERVAL '1 hour', NOW()
     ) ON CONFLICT (id) DO UPDATE SET 
       amount = ${finalAmount}, 
       qris_image_url = ${klikQrisRes.qrisUrl ?? ''};
@@ -198,5 +199,5 @@ export async function POST(request: Request) {
     }
   });
 
-  return NextResponse.redirect(new URL(`/dashboard/orders/${orderNumber}`, request.url), { status: 303 });
+  return redirectApp(`/dashboard/orders/${orderNumber}`, request);
 }

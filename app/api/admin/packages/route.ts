@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { products } from "@/db/schema";
 import { getCurrentUser } from "@/lib/session-server";
 import { slugify } from "@/lib/slug";
+import { redirectApp } from "@/lib/redirect";
 
 const packageSchema = z.object({
   name: z.string().min(3),
@@ -15,7 +16,7 @@ const packageSchema = z.object({
   status: z.enum(["draft", "active", "inactive", "blocked"]).default("active")
 });
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const current = await getCurrentUser();
   if (!current || current.session.role !== "admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
 
   const db = getDb();
   const slug = `${slugify(payload.name)}-${Math.random().toString(36).slice(2, 6)}`;
+
   await db.insert(products).values({
     sellerId: null,
     categoryId: null,
@@ -48,5 +50,5 @@ export async function POST(request: Request) {
     isCustomPackage: true
   });
 
-  return NextResponse.redirect(new URL("/admin/packages", request.url), { status: 303 });
+  return redirectApp("/admin/packages", request);
 }

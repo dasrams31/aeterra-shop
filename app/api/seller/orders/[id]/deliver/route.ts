@@ -5,6 +5,7 @@ import { findApprovedSellerProfileByUserId } from "@/lib/sellers";
 import { logActivity } from "@/lib/activity";
 import { sendNotificationEmail } from "@/lib/email";
 import { canAccessSellerItem } from "@/lib/backend-guards.js";
+import { redirectApp } from "@/lib/redirect";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const current = await getCurrentUser();
@@ -36,5 +37,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   });
   await logActivity({ actorId: current.user.id, action: "order.manual_delivered", entityType: "order_item", entityId: String(id), metadata: { role: current.session.role } });
 
-  return NextResponse.redirect(new URL(`/seller/orders/${id}`, request.url), { status: 303 });
+  return redirectApp(`/seller/orders/${id}`, request);
 }

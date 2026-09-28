@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/session-server";
 import { slugify } from "@/lib/slug";
 import { updateSellerProfile } from "@/lib/sellers";
 import { logActivity } from "@/lib/activity";
+import { redirectApp } from "@/lib/redirect";
 
 const settingsSchema = z.object({
   storeName: z.string().min(3).max(80),
@@ -31,5 +32,5 @@ export async function POST(request: NextRequest) {
   if (!result) return NextResponse.json({ error: "Seller profile not found" }, { status: 404 });
 
   await logActivity({ actorId: current.user.id, action: "seller.settings_updated", entityType: "seller_profile", entityId: result.id });
-  return NextResponse.redirect(new URL("/seller/settings?updated=1", request.url), { status: 303 });
+  return redirectApp("/seller/settings?updated=1", request);
 }

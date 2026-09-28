@@ -10,7 +10,7 @@ export default async function DashboardResellerPage() {
   const current = await getCurrentUser();
   const status = current?.user.resellerStatus ?? "none";
   const referralCode = current ? referralCodeForUser(current.user) : "";
-  const referralUrl = referralCode ? buildReferralUrl(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000", referralCode) : "";
+  const referralUrl = referralCode ? buildReferralUrl(process.env.NEXT_PUBLIC_APP_URL ?? "https://shop.dasrams.biz.id", referralCode) : "";
   const referralStats = referralCode ? await getReferralStatsForCode(referralCode) : { count: 0, orderCount: 0, revenue: 0, rows: [] };
 
   return (

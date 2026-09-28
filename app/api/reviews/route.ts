@@ -1,11 +1,12 @@
-import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { orderItems, orders, reviews } from "@/db/schema";
 import { getCurrentUser } from "@/lib/session-server";
 import { createReview } from "@/lib/reviews";
 import { logActivity } from "@/lib/activity";
+import { redirectApp } from "@/lib/redirect";
 
 const reviewSchema = z.object({
   orderItemId: z.coerce.number().int().positive(),
@@ -16,7 +17,7 @@ const reviewSchema = z.object({
 export async function POST(request: NextRequest) {
   const current = await getCurrentUser();
   if (!current) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return redirectApp("/login", request);
   }
 
   const form = await request.formData();
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
 
   const [existing] = await db.select().from(reviews).where(eq(reviews.orderItemId, item.id)).limit(1);
   if (existing) {
-    return NextResponse.redirect(new URL(`/dashboard/orders/${order.orderNumber}`, request.url), { status: 303 });
+    return redirectApp(`/dashboard/orders/${order.orderNumber}`, request);
   }
 
   await createReview({
@@ -69,5 +70,5 @@ export async function POST(request: NextRequest) {
     metadata: { productId: item.productId, rating: payload.rating }
   });
 
-  return NextResponse.redirect(new URL(`/dashboard/orders/${order.orderNumber}`, request.url), { status: 303 });
+  return redirectApp(`/dashboard/orders/${order.orderNumber}`, request);
 }

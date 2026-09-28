@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSessionCookieName, createSessionToken, verifyPassword } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { findUserByEmail } from "@/lib/users";
+import { redirectApp } from "@/lib/redirect";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -24,10 +25,10 @@ export async function POST(request: Request) {
 
   const user = await findUserByEmail(payload.email.toLowerCase());
   if (!user || !user.passwordHash || !verifyPassword(payload.password, user.passwordHash)) {
-    return NextResponse.redirect(new URL("/login?error=invalid", request.url));
+    return redirectApp("/login?error=invalid", request);
   }
 
-  const response = NextResponse.redirect(new URL(dashboardPath(user.role), request.url));
+  const response = redirectApp(dashboardPath(user.role), request);
   response.cookies.set(getSessionCookieName(), createSessionToken({ userId: user.id, role: user.role }), {
     httpOnly: true,
     sameSite: "lax",

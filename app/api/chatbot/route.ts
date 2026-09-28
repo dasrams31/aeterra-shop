@@ -15,7 +15,7 @@ export async function POST(request: Request) {
 
   const apiKey = process.env.OPENROUTER_API_KEY;
   const model = process.env.OPENROUTER_MODEL ?? "openai/gpt-4o-mini";
-  const siteUrl = process.env.OPENROUTER_SITE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const siteUrl = process.env.OPENROUTER_SITE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://shop.dasrams.biz.id";
 
   if (!apiKey) {
     return NextResponse.json({ reply: buildFallbackChatReply(message), source: "fallback" });

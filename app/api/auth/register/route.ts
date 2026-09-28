@@ -5,6 +5,7 @@ import { users } from "@/db/schema";
 import { createSessionToken, hashPassword, getSessionCookieName } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { sendNotificationEmail } from "@/lib/email";
+import { redirectApp } from "@/lib/redirect";
 
 const registerSchema = z.object({
   name: z.string().min(2),
@@ -30,7 +31,8 @@ export async function POST(request: Request) {
     .values({ id: userId, name: payload.name, email: payload.email.toLowerCase(), passwordHash })
     .returning();
 
-  const response = NextResponse.redirect(new URL(user.role === "seller" ? "/seller" : user.role === "admin" ? "/admin" : "/dashboard", request.url));
+  const targetPath = user.role === "seller" ? "/seller" : user.role === "admin" ? "/admin" : "/dashboard";
+  const response = redirectApp(targetPath, request);
   response.cookies.set(getSessionCookieName(), createSessionToken({ userId: user.id, role: user.role }), {
     httpOnly: true,
     sameSite: "lax",

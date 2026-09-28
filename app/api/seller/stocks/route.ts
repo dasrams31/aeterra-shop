@@ -5,6 +5,7 @@ import { productStocks, products } from "@/db/schema";
 import { getCurrentUser } from "@/lib/session-server";
 import { ensureSellerProfile, findApprovedSellerProfileByUserId } from "@/lib/sellers";
 import { eq } from "drizzle-orm";
+import { redirectApp } from "@/lib/redirect";
 
 const stockSchema = z.object({
   productId: z.coerce.number().int().positive(),
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
       await db.update(productStocks).set({ isSold: true }).where(eq(productStocks.id, payload.stockId));
     }
 
-    return NextResponse.redirect(new URL(current.session.role === "admin" ? "/admin/products" : "/seller/stocks", request.url), { status: 303 });
+    return redirectApp(current.session.role === "admin" ? "/admin/products" : "/seller/stocks", request);
   }
 
   const payload = stockSchema.parse({
@@ -81,5 +82,5 @@ export async function POST(request: Request) {
     await db.insert(productStocks).values(stockRows);
   }
 
-  return NextResponse.redirect(new URL(current.session.role === "admin" ? "/admin/products" : "/seller/stocks", request.url), { status: 303 });
+  return redirectApp(current.session.role === "admin" ? "/admin/products" : "/seller/stocks", request);
 }

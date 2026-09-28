@@ -7,17 +7,18 @@ import { createTicket, getSellerIdForOrder } from "@/lib/tickets";
 import { getCurrentUser } from "@/lib/session-server";
 import { logActivity } from "@/lib/activity";
 import { sendNotificationEmail } from "@/lib/email";
+import { redirectApp } from "@/lib/redirect";
 
 const ticketSchema = z.object({
   subject: z.string().min(3).max(200),
   message: z.string().max(2000).optional(),
-  orderId: z.string().uuid().optional()
+  orderId: z.string().optional()
 });
 
 export async function POST(request: NextRequest) {
   const current = await getCurrentUser();
   if (!current) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return redirectApp("/login", request);
   }
 
   const form = await request.formData();
@@ -46,6 +47,7 @@ export async function POST(request: NextRequest) {
     orderId: payload.orderId ?? null,
     sellerId
   });
+
   await sendNotificationEmail({
     to: process.env.SUPPORT_EMAIL,
     subject: `Ticket baru: ${payload.subject}`,
@@ -60,5 +62,5 @@ export async function POST(request: NextRequest) {
     metadata: { subject: payload.subject, hasMessage: Boolean(payload.message), orderId: payload.orderId ?? null, sellerId }
   });
 
-  return NextResponse.redirect(new URL("/dashboard/tickets", request.url), { status: 303 });
+  return redirectApp("/dashboard/tickets", request);
 }

@@ -6,6 +6,7 @@ import { products } from "@/db/schema";
 import { getCurrentUser } from "@/lib/session-server";
 import { ensureSellerProfile, findApprovedSellerProfileByUserId } from "@/lib/sellers";
 import { slugify } from "@/lib/slug";
+import { redirectApp } from "@/lib/redirect";
 
 const productSchema = z.object({
   name: z.string().min(3),
@@ -69,5 +70,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     await db.update(products).set({ ...updates, sellerId: sellerProfile?.id ?? null }).where(and(eq(products.id, idNum), eq(products.sellerId, sellerProfile?.id ?? "")));
   }
 
-  return NextResponse.redirect(new URL(current.session.role === "admin" ? "/admin/products" : "/seller/products", request.url), { status: 303 });
+  return redirectApp(current.session.role === "admin" ? "/admin/products" : "/seller/products", request);
 }

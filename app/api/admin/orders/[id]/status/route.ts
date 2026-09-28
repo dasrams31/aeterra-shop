@@ -1,58 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { setAdminOrderStatus } from "@/lib/orders";
 import { getCurrentUser } from "@/lib/session-server";
-import { getOrderDetailByNumber, getOrderNotificationRecipient, setAdminOrderStatus } from "@/lib/orders";
 import { logActivity } from "@/lib/activity";
-import { sendNotificationEmail } from "@/lib/email";
-import { canCancelOrder, canMarkFailed, canRefundOrder } from "@/lib/backend-guards.js";
+import { redirectApp } from "@/lib/redirect";
 
-const statusSchema = z.object({ action: z.enum(["cancel", "refund", "fail"]) });
+const statusSchema = z.object({
+  action: z.enum(["cancel", "refund", "fail"])
+});
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const current = await getCurrentUser();
-  if (!current || current.session.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!current || current.session.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const { id } = await params;
   const form = await request.formData();
   const payload = statusSchema.parse({ action: form.get("action") });
 
-  const detail = await getOrderDetailByNumber(id);
-  if (!detail) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-
-  if (payload.action === "cancel" && !canCancelOrder(detail.order.status)) {
-    return NextResponse.json({ error: "Only pending orders can be cancelled" }, { status: 400 });
+  const detail = await setAdminOrderStatus(id, payload.action);
+  if (!detail) {
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
-
-  if (payload.action === "refund" && !canRefundOrder({ orderStatus: detail.order.status, paymentStatus: detail.payment?.status ?? null })) {
-    return NextResponse.json({ error: "Only paid orders can be refunded" }, { status: 400 });
-  }
-
-  if (payload.action === "fail" && !canMarkFailed(detail.order.status)) {
-    return NextResponse.json({ error: "Only paid or processing orders can be failed" }, { status: 400 });
-  }
-
-  const updated = await setAdminOrderStatus(detail.order.id, payload.action);
-  if (!updated) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-
-  const recipient = await getOrderNotificationRecipient(detail.order.id);
-  await sendNotificationEmail({
-    to: recipient?.email,
-    subject: `Status order ${detail.order.orderNumber} diperbarui`,
-    text:
-      payload.action === "cancel"
-        ? `Order ${detail.order.orderNumber} dibatalkan oleh admin. Jika payment masih pending, status pembayaran akan ditutup.`
-        : payload.action === "refund"
-          ? `Order ${detail.order.orderNumber} ditandai refunded oleh admin.`
-          : `Order ${detail.order.orderNumber} ditandai failed oleh admin.`
-  });
 
   await logActivity({
     actorId: current.user.id,
     action: `order.${payload.action}`,
     entityType: "order",
-    entityId: detail.order.id,
-    metadata: { orderNumber: detail.order.orderNumber, action: payload.action }
+    entityId: id,
+    metadata: { action: payload.action, orderNumber: detail.order.orderNumber }
   });
 
-  return NextResponse.redirect(new URL(`/admin/orders/${detail.order.orderNumber}`, request.url), { status: 303 });
+  return redirectApp(`/admin/orders/${detail.order.orderNumber}`, request);
 }

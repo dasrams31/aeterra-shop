@@ -24,8 +24,12 @@ export default async function DashboardPaymentsPage() {
                 <p className="mt-1 text-xs text-muted">{payment.providerReference}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Link className="rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium" href={`/dashboard/orders/${payment.orderNumber}`}>Detail order</Link>
-                {payment.status === "pending" && payment.paymentUrl ? <a className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white" href={payment.paymentUrl}>Bayar</a> : null}
+                <Link className="rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium" href={`/dashboard/orders/${payment.orderNumber}`}>Detail Order & QRIS</Link>
+                {payment.status === "pending" && (
+                  <Link className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white" href={`/dashboard/orders/${payment.orderNumber}`}>
+                    Bayar / Scan QRIS
+                  </Link>
+                )}
               </div>
             </div>
           </article>

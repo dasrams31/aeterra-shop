@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSessionCookieName } from "@/lib/auth";
+import { redirectApp } from "@/lib/redirect";
 
 export async function POST(request: Request) {
-  const response = NextResponse.redirect(new URL("/", request.url));
+  const response = redirectApp("/", request);
   response.cookies.set(getSessionCookieName(), "", {
     httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0
+    expires: new Date(0),
+    path: "/"
   });
   return response;
 }

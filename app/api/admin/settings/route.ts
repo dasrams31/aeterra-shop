@@ -3,12 +3,13 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/session-server";
 import { updateMarketplaceSettings } from "@/lib/sellers";
 import { logActivity } from "@/lib/activity";
+import { redirectApp } from "@/lib/redirect";
 
 const settingsSchema = z.object({
-  appName: z.string().min(2).max(80),
-  supportEmail: z.string().email().optional(),
+  appName: z.string().min(3).max(80),
+  supportEmail: z.string().email().optional().or(z.literal("")),
   announcement: z.string().max(500).optional(),
-  checkoutEnabled: z.coerce.boolean().default(true)
+  checkoutEnabled: z.coerce.boolean().optional()
 });
 
 export async function POST(request: NextRequest) {
@@ -25,11 +26,11 @@ export async function POST(request: NextRequest) {
 
   const settings = await updateMarketplaceSettings({
     appName: payload.appName,
-    supportEmail: payload.supportEmail ?? null,
-    announcement: payload.announcement ?? null,
-    checkoutEnabled: payload.checkoutEnabled
+    supportEmail: payload.supportEmail || null,
+    announcement: payload.announcement || null,
+    checkoutEnabled: payload.checkoutEnabled ?? true
   });
 
-  await logActivity({ actorId: current.user.id, action: "admin.settings_updated", entityType: "marketplace_settings", entityId: settings?.id ?? current.user.id, metadata: { appName: payload.appName, checkoutEnabled: payload.checkoutEnabled } });
-  return NextResponse.redirect(new URL("/admin/settings?updated=1", request.url), { status: 303 });
+  await logActivity({ actorId: current.user.id, action: "marketplace.settings_updated", entityType: "marketplace_settings", entityId: settings?.id ?? "default" });
+  return redirectApp("/admin/settings?updated=1", request);
 }

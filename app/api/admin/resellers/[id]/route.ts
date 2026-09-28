@@ -6,6 +6,7 @@ import { users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/session-server";
 import { logActivity } from "@/lib/activity";
 import { sendNotificationEmail } from "@/lib/email";
+import { redirectApp } from "@/lib/redirect";
 
 const resellerSchema = z.object({ status: z.enum(["approved", "rejected"]) });
 
@@ -21,14 +22,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const db = getDb();
   await db.update(users).set({ resellerStatus: payload.status, isReseller: payload.status === "approved", updatedAt: new Date() }).where(eq(users.id, idNum));
   const [user] = await db.select().from(users).where(eq(users.id, idNum)).limit(1);
-  await sendNotificationEmail({
-    to: user?.email,
-    subject: `Status reseller ${payload.status}`,
-    text: payload.status === "approved"
-      ? "Pengajuan reseller kamu disetujui. Harga reseller akan muncul pada produk yang mendukung."
-      : "Pengajuan reseller kamu belum disetujui. Kamu tetap bisa belanja sebagai buyer biasa."
-  });
+  if (user?.email) {
+    await sendNotificationEmail({
+      to: user.email,
+      subject: `Status reseller ${payload.status}`,
+      text: payload.status === "approved"
+        ? "Pengajuan reseller kamu disetujui. Harga reseller akan muncul pada produk yang mendukung."
+        : "Pengajuan reseller kamu belum disetujui. Kamu tetap bisa belanja sebagai buyer biasa."
+    });
+  }
   await logActivity({ actorId: current.user.id, action: "reseller.moderated", entityType: "user", entityId: id, metadata: { status: payload.status } });
 
-  return NextResponse.redirect(new URL("/admin/users", request.url), { status: 303 });
+  return redirectApp("/admin/users", request);
 }

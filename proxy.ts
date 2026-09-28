@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookieName, verifyEdgeSessionToken } from "@/lib/edge-auth";
+import { getAppBaseUrl } from "@/lib/redirect";
 
 const protectedPrefixes = ["/dashboard", "/seller", "/admin"];
 
@@ -12,7 +13,8 @@ export async function proxy(request: NextRequest) {
   const session = await verifyEdgeSessionToken(token);
 
   if (!session) {
-    const loginUrl = new URL("/login", request.url);
+    const baseUrl = getAppBaseUrl(request);
+    const loginUrl = new URL("/login", baseUrl);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }

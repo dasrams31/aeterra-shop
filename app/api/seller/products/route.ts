@@ -5,6 +5,7 @@ import { products } from "@/db/schema";
 import { getCurrentUser } from "@/lib/session-server";
 import { ensureSellerProfile, findApprovedSellerProfileByUserId } from "@/lib/sellers";
 import { slugify } from "@/lib/slug";
+import { redirectApp } from "@/lib/redirect";
 
 const productSchema = z.object({
   name: z.string().min(3),
@@ -17,10 +18,6 @@ const productSchema = z.object({
   categoryId: z.coerce.number().int().positive().optional(),
   isCustomPackage: z.coerce.boolean().optional()
 });
-
-function forbidden(url: string) {
-  return NextResponse.redirect(new URL(url, process.env.NEXT_PUBLIC_APP_URL ? process.env.NEXT_PUBLIC_APP_URL : "http://localhost:3000"));
-}
 
 export async function POST(request: Request) {
   const current = await getCurrentUser();
@@ -54,7 +51,7 @@ export async function POST(request: Request) {
   const uniqueSuffix = Math.random().toString(36).slice(2, 6);
   const slug = `${slugBase}-${uniqueSuffix}`;
 
-  const [product] = await db
+  await db
     .insert(products)
     .values({
       sellerId: sellerProfile?.id ?? null,
@@ -68,10 +65,7 @@ export async function POST(request: Request) {
       fulfillmentType: payload.fulfillmentType,
       status: payload.status,
       isCustomPackage: payload.isCustomPackage ?? false
-    })
-    .returning();
+    });
 
-  return NextResponse.redirect(new URL(current.session.role === "admin" ? "/admin/products" : "/seller/products", request.url), {
-    status: 303
-  });
+  return redirectApp(current.session.role === "admin" ? "/admin/products" : "/seller/products", request);
 }
