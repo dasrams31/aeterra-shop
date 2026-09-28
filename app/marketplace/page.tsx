@@ -1,97 +1,156 @@
 import Link from "next/link";
 import { listCategories, listMarketplaceProducts } from "@/lib/products";
-import { productPriceForUser } from "@/lib/pricing.js";
-import { getReviewSummaryByProductId } from "@/lib/reviews";
-import { getCurrentUser } from "@/lib/session-server";
-import { getMarketplaceSettings } from "@/lib/sellers";
+import { formatPrice } from "@/lib/currency";
 
 export const dynamic = "force-dynamic";
-
-const formatMoney = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
 
 export default async function MarketplacePage({
   searchParams
 }: {
   searchParams: Promise<{ q?: string; category?: string }>;
 }) {
-  const params = await searchParams;
-  const q = params.q ?? "";
-  const category = params.category ?? "";
-  const current = await getCurrentUser();
-  const settings = await getMarketplaceSettings().catch(() => null);
+  const { q, category } = await searchParams;
   const [products, categories] = await Promise.all([listMarketplaceProducts(q, category), listCategories()]);
-  const productsWithReviews = await Promise.all(
-    products.map(async (product) => ({
-      ...product,
-      reviewSummary: await getReviewSummaryByProductId(product.id)
-    }))
-  );
 
   return (
-    <main className="aeternum-bg min-h-screen px-6 py-10 text-text">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-primary">Marketplace</p>
-            <h1 className="mt-2 text-3xl font-black tracking-tight md:text-5xl">Cari produk digital yang siap dipakai.</h1>
-            <p className="mt-2 max-w-2xl text-sm text-muted">Bandingkan produk dari harga, kategori, cara akses, dan ulasan sebelum membeli.</p>
+    <div className="space-y-10">
+      {/* Header Banner */}
+      <section className="rounded-3xl bg-gradient-to-r from-purple-950 via-slate-900 to-purple-950 p-8 sm:p-12 text-white border border-purple-800 shadow-2xl relative overflow-hidden">
+        <div className="relative z-10 max-w-3xl space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-400/30 text-purple-200 text-xs font-bold">
+            <i className="fa-solid fa-store text-yellow-400"></i> Katalog Resmi Aeternum Shop
           </div>
-          <div className="floaty rounded-xl2 border-[3px] border-border bg-white px-4 py-2 text-sm font-black shadow-soft">Akses Cepat · Order Jelas</div>
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight">Katalog Produk & Layanan Premium</h1>
+          <p className="text-sm text-purple-200/80 leading-relaxed max-w-2xl font-medium">
+            Temukan akun premium, tools AI kreatif, script otomatisasi Python, dan software original dengan aktivasi instan serta garansi penuh.
+          </p>
+
+          <form action="/marketplace" method="GET" className="flex flex-col sm:flex-row gap-3 pt-2">
+            <div className="relative flex-1">
+              <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+              <input
+                type="text"
+                name="q"
+                defaultValue={q}
+                placeholder="Cari produk (contoh: Canva, Gemini, Script, Spotify)..."
+                className="w-full pl-11 pr-4 py-3 bg-slate-900/80 border border-purple-500/40 rounded-2xl text-sm font-medium text-white placeholder:text-slate-400 focus:outline-none focus:border-yellow-400 transition"
+              />
+            </div>
+            {category && <input type="hidden" name="category" value={category} />}
+            <button
+              type="submit"
+              className="px-6 py-3 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black rounded-2xl text-sm transition flex items-center justify-center gap-2 shrink-0 shadow-lg shadow-yellow-400/20"
+            >
+              <i className="fa-solid fa-search"></i> Cari
+            </button>
+          </form>
         </div>
+      </section>
 
-        {settings?.checkoutEnabled === false ? (
-          <div className="mt-4 rounded-xl2 border-[3px] border-border bg-surfaceSoft p-4 text-sm font-semibold text-muted shadow-soft">Checkout sedang dinonaktifkan admin untuk sementara.</div>
-        ) : null}
-
-        <div className="mt-6 flex flex-wrap gap-2">
-          {categories.slice(0, 6).map((item) => (
-            <Link key={item.slug} href={`/marketplace?category=${item.slug}`} className={`lift rounded-full border-[2px] border-border px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] shadow-soft ${category === item.slug ? "bg-primary text-white" : "bg-white text-text"}`}>
-              {item.name}
+      {/* Dynamic Category Badges Switcher */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Pilih Kategori Produk</span>
+          {category && (
+            <Link href="/marketplace" className="text-xs font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1">
+              <i className="fa-solid fa-xmark"></i> Reset Filter
+            </Link>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2.5 overflow-x-auto pb-2">
+          <Link
+            href="/marketplace"
+            className={`px-4 py-2 rounded-2xl text-xs font-bold transition flex items-center gap-2 ${
+              !category
+                ? "bg-yellow-400 text-slate-950 shadow-md shadow-yellow-400/20"
+                : "bg-slate-900 border border-slate-800 text-slate-300 hover:border-purple-500/50 hover:text-white"
+            }`}
+          >
+            <i className="fa-solid fa-layer-group"></i> Semua ({products.length})
+          </Link>
+          {categories.map((cat) => (
+            <Link
+              key={cat.slug}
+              href={`/marketplace?category=${cat.slug}`}
+              className={`px-4 py-2 rounded-2xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap ${
+                category === cat.slug
+                  ? "bg-yellow-400 text-slate-950 shadow-md shadow-yellow-400/20"
+                  : "bg-slate-900 border border-slate-800 text-slate-300 hover:border-purple-500/50 hover:text-white"
+              }`}
+            >
+              <span>{cat.name}</span>
             </Link>
           ))}
         </div>
+      </section>
 
-        <form className="reveal-up mt-6 flex flex-col gap-3 rounded-xl2 border-[3px] border-border bg-white p-4 shadow-soft md:flex-row" action="/marketplace">
-          <input name="q" defaultValue={q} className="min-h-12 flex-1 rounded-xl border-[2px] border-border bg-surfaceSoft px-4 text-sm font-semibold outline-none" placeholder="Cari ChatGPT, Netflix, Canva, lisensi..." />
-          {category ? <input type="hidden" name="category" value={category} /> : null}
-          <button className="lift shine rounded-xl border-[2px] border-border bg-primary px-5 py-3 text-sm font-black text-white shadow-soft">Cari Produk</button>
-          {q || category ? <Link className="lift rounded-xl border-[2px] border-border bg-white px-5 py-3 text-center text-sm font-black" href="/marketplace">Reset</Link> : null}
-        </form>
+      {/* Product Grid */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <span className="text-xs font-bold text-slate-400">
+            Menampilkan <strong className="text-white">{products.length}</strong> produk tersedia
+          </span>
+        </div>
 
-        <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {productsWithReviews.length === 0 ? (
-            <div className="rounded-xl2 border-[3px] border-border bg-white p-6 text-sm text-muted shadow-soft">{q || category ? "Produk tidak ditemukan." : "Belum ada produk aktif."}</div>
-          ) : (
-            productsWithReviews.map((product) => (
-              <article key={product.id} className="lift hero-card rounded-xl2 border-[3px] border-border p-5 shadow-soft">
-                <div className="flex items-start justify-between gap-3">
-                  <p className="rounded-full border-[2px] border-border bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-primary">{product.fulfillmentType === "auto" ? "Akses cepat" : "Diproses"}</p>
-                  <p className="rounded-full border-[2px] border-border bg-primary px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-white">
-                    {product.reviewSummary.count === 0 ? "Baru" : `${product.reviewSummary.average.toFixed(1)}/5`}
-                  </p>
-                </div>
-                <h2 className="mt-4 text-xl font-black leading-tight">{product.name}</h2>
-                <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted">{product.description}</p>
-                <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted">
-                  {product.categoryName ? <span className="rounded-full border-[2px] border-border bg-surfaceSoft px-3 py-1 font-black">{product.categoryName}</span> : null}
-                  <span className="rounded-full border-[2px] border-border bg-surfaceSoft px-3 py-1 font-black">Status aktif</span>
-                  <span className="rounded-full border-[2px] border-border bg-surfaceSoft px-3 py-1 font-black">{product.reviewSummary.count} review</span>
-                  {productPriceForUser(product, current?.user) !== product.price ? <span className="rounded-full border-[2px] border-border bg-surfaceSoft px-3 py-1 font-black">Harga reseller aktif</span> : product.resellerPrice ? <span className="rounded-full border-[2px] border-border bg-surfaceSoft px-3 py-1 font-black">Harga khusus tersedia</span> : null}
-                </div>
-                <div className="mt-5 flex items-center justify-between border-t-[2px] border-border pt-4">
-                  <div>
-                    <p className="text-[11px] font-black uppercase tracking-[0.16em] text-muted">Mulai dari</p>
-                    <span className="text-xl font-black">{formatMoney.format(productPriceForUser(product, current?.user))}</span>
+        {products.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-slate-800 p-12 text-center space-y-3">
+            <div className="w-14 h-14 rounded-2xl bg-slate-900 text-slate-500 flex items-center justify-center mx-auto text-2xl">
+              <i className="fa-solid fa-box-open"></i>
+            </div>
+            <h3 className="text-base font-bold text-white">Tidak ada produk ditemukan</h3>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              Coba gunakan kata kunci pencarian lain atau pilih kategori yang berbeda.
+            </p>
+            <Link href="/marketplace" className="inline-block mt-2 text-xs font-bold text-yellow-400 hover:underline">
+              Lihat semua katalog produk
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {products.map((p) => (
+              <div
+                key={p.id}
+                className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 flex flex-col justify-between hover:border-purple-500/50 hover:bg-slate-900 transition-all group shadow-sm"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300">
+                      {p.categoryName || "General"}
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                      <i className="fa-solid fa-bolt text-[9px]"></i> Ready Stock
+                    </span>
                   </div>
-                  <Link className="lift rounded-full border-[2px] border-border bg-primary px-4 py-2 text-sm font-black text-white" href={`/products/${product.slug}`}>
-                    Lihat detail
+
+                  <div>
+                    <h3 className="text-sm font-bold text-white group-hover:text-yellow-400 transition leading-snug line-clamp-2">
+                      {p.name}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                      {p.description}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] text-slate-500 uppercase font-bold">Harga</div>
+                    <div className="text-base font-black text-white font-mono">
+                      {formatPrice(p.price)}
+                    </div>
+                  </div>
+                  <Link
+                    href={`/products/${p.slug}`}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-md shadow-purple-600/20"
+                  >
+                    Beli <i className="fa-solid fa-arrow-right text-[10px]"></i>
                   </Link>
                 </div>
-              </article>
-            ))
-          )}
-        </div>
-      </div>
-    </main>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
